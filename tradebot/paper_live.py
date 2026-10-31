@@ -1,7 +1,12 @@
-"""Live paper trading: real Upstox candles, simulated orders. No real orders are sent.
+"""Live paper trading: real prices, simulated orders. No real orders are sent.
 
-Each poll fetches recent candles, and every newly *completed* bar is pushed
-through the same TradingDesk the backtester uses.
+Data: Upstox candles (primary). If Upstox fails 3 times in a row for a symbol
+(expired token, outage), that symbol switches to Kotak Neo quotes, turned into
+candles locally, and Upstox is retried every few minutes. Warm-up history falls
+back to Yahoo if Upstox is unavailable at start-up.
+
+Each poll pushes every newly *completed* candle through the same TradingDesk
+the backtester uses.
 
 Kill switch: create a file named STOP in the run folder. All positions are
 closed and no new trades are taken.
@@ -17,10 +22,14 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from .config import build_desk
-from .data.upstox import UpstoxData, UpstoxError
+from .data.barbuilder import BarBuilder
+from .data.upstox import UpstoxData
 
 IST = ZoneInfo("Asia/Kolkata")
 log = logging.getLogger(__name__)
+
+FAILS_BEFORE_BACKUP = 3
+RETRY_PRIMARY_EVERY = 15      # polls
 
 
 def market_open(now: datetime, holidays: set[str]) -> bool:
@@ -34,28 +43,121 @@ def completed(df: pd.DataFrame, interval_min: int, now: datetime) -> pd.DataFram
     return df[df.index + pd.Timedelta(minutes=interval_min) <= now]
 
 
+class LiveFeed:
+    """Today's completed candles per symbol, with Upstox -> Kotak Neo failover."""
+
+    def __init__(self, specs, interval: int, upstox=None, kotak=None, notify=None):
+        self.specs = {s.instrument.symbol: s for s in specs}
+        self.interval = interval
+        self.upstox = upstox
+        self.kotak = kotak
+        self.notify = notify or (lambda msg: None)
+        self.fails = {sym: 0 for sym in self.specs}
+        self.on_backup: set[str] = set()
+        self.builders = {sym: BarBuilder(interval) for sym in self.specs}
+        self.last_primary: dict[str, pd.DataFrame] = {}
+        self._polls = 0
+
+    def _has_backup(self, sym) -> bool:
+        b = self.specs[sym].backup or {}
+        return self.kotak is not None and bool(b.get("kotak_token"))
+
+    def poll(self, now: datetime) -> dict[str, pd.DataFrame]:
+        self._polls += 1
+        out = {}
+        for sym, spec in self.specs.items():
+            if sym in self.on_backup and self._polls % RETRY_PRIMARY_EVERY:
+                continue                                  # stay on backup until the next retry
+            try:
+                df = self.upstox.intraday(spec.data_key, "minutes", self.interval)
+                self.last_primary[sym] = completed(df, self.interval, now)
+                self.fails[sym] = 0
+                if sym in self.on_backup:
+                    self.on_backup.discard(sym)
+                    self.notify(f"[PAPER] {sym}: Upstox data is back, switched from Kotak Neo")
+                out[sym] = self.last_primary[sym]
+            except Exception as e:
+                self.fails[sym] += 1
+                log.warning("%s Upstox error (%d in a row): %s", sym, self.fails[sym], e)
+                if self.fails[sym] >= FAILS_BEFORE_BACKUP and sym not in self.on_backup and self._has_backup(sym):
+                    self.on_backup.add(sym)
+                    self.notify(f"[PAPER] {sym}: Upstox failing ({e}); switched to Kotak Neo quotes")
+        if self.on_backup:
+            self._poll_backup(now)
+            for sym in self.on_backup:
+                built = self.builders[sym].frame()
+                base = self.last_primary.get(sym, pd.DataFrame(columns=built.columns))
+                df = pd.concat([base, built]) if len(base) else built
+                out[sym] = df[~df.index.duplicated(keep="first")].sort_index()   # prefer real candles
+        return out
+
+    def _poll_backup(self, now: datetime) -> None:
+        toks = {}
+        for sym in self.on_backup:
+            b = self.specs[sym].backup
+            toks[str(b["kotak_token"])] = (sym, b.get("kotak_segment", "nse_cm"))
+        try:
+            prices = self.kotak.ltp([(t, seg) for t, (_, seg) in toks.items()])
+        except Exception as e:
+            log.warning("Kotak Neo quotes failed: %s", e)
+            prices = {}
+        for tok, (sym, _) in toks.items():
+            if tok in prices:
+                self.builders[sym].update(now, prices[tok])
+            self.builders[sym].close_due(now)
+
+
+def warmup_history(spec, interval: int, days: int, upstox) -> pd.DataFrame:
+    """Previous days' candles so indicators are ready. Upstox first, then Yahoo."""
+    end = date.today() - timedelta(days=1)
+    try:
+        return upstox.historical(spec.data_key, "minutes", interval, date.today() - timedelta(days=days), end)
+    except Exception as e:
+        log.warning("%s: Upstox history failed (%s); trying Yahoo", spec.instrument.symbol, e)
+    try:
+        from .data.yahoo import YahooData, to_yahoo_ticker
+        df = YahooData().history(to_yahoo_ticker(spec.instrument.symbol, spec.instrument.exchange),
+                                 f"{interval}m", date.today() - timedelta(days=min(days, 59)), end)
+        t = df.index.time
+        return df[(t >= datetime.strptime("09:15", "%H:%M").time()) & (t < datetime.strptime("15:30", "%H:%M").time())]
+    except Exception as e:
+        log.warning("%s: Yahoo history failed too (%s); indicators will warm up live", spec.instrument.symbol, e)
+        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+
+
 def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_days: int = 10) -> None:
     from .alerts import build_notifier
+    from .context import ContextConfig, MarketContext
+
     notifier = build_notifier(cfg.get("alerts"))
+    ctx_cfg = ContextConfig.from_dict(cfg.get("context"))
+    symbols = [i["symbol"] for i in cfg["instruments"]]
+    context = MarketContext.build(ctx_cfg, symbols) if ctx_cfg.enabled else None
     desk, specs = build_desk(cfg, live_clock=True, notifier=notifier)
+    desk.context = context
     tf = cfg.get("timeframe", {"unit": "minutes", "interval": 5})
     if tf["unit"] != "minutes":
         raise ValueError("Paper trading supports minute candles only")
     holidays = {str(h) for h in cfg.get("holidays", [])}
+
     upstox = UpstoxData()
+    kotak = None
+    if any(s.backup for s in specs):
+        from .data.kotak import KotakNeoQuotes
+        kotak = KotakNeoQuotes()   # logs in lazily, only if a backup is needed
+    feed = LiveFeed(specs, tf["interval"], upstox, kotak,
+                    notify=notifier.send if notifier else (lambda m: log.warning(m)))
+
     run = Path(out_dir) / f"paper_{datetime.now(IST):%Y%m%d_%H%M}"
     run.mkdir(parents=True, exist_ok=True)
     stop_file = run / "STOP"
     log.info("Paper trading started. Kill switch: touch %s", stop_file)
+    if context is not None and context.banned:
+        log.info("F&O ban list today: %s", ", ".join(sorted(context.banned)))
 
-    # Warm-up history so indicators are valid from the first live bar.
-    history: dict[str, pd.DataFrame] = {}
-    for s in specs:
-        h = upstox.historical(s.data_key, "minutes", tf["interval"],
-                              date.today() - timedelta(days=warmup_days), date.today() - timedelta(days=1))
-        history[s.instrument.symbol] = h
+    history = {s.instrument.symbol: warmup_history(s, tf["interval"], warmup_days, upstox) for s in specs}
     last_done = {sym: (df.index[-1] if len(df) else None) for sym, df in history.items()}
-    first_pass = set(history)   # on start-up, skip bars that closed before we started
+    first_pass = set(history)   # on start-up, skip candles that closed before we started
 
     try:
         while True:
@@ -69,20 +171,15 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
                     break
                 time.sleep(poll_seconds)
                 continue
-            for s in specs:
-                sym = s.instrument.symbol
-                try:
-                    today = upstox.intraday(s.data_key, "minutes", tf["interval"])
-                except UpstoxError as e:
-                    log.warning("%s data error: %s", sym, e)
-                    continue
-                today = completed(today, tf["interval"], now)
-                df = pd.concat([history[sym], today])
+            for sym, today in feed.poll(now).items():
+                df = pd.concat([history[sym], today]) if len(history[sym]) else today
                 df = df[~df.index.duplicated(keep="last")].sort_index()
                 if sym in first_pass:
                     first_pass.discard(sym)
                     if len(df):
                         last_done[sym] = df.index[-1]
+                    continue
+                if df.empty:
                     continue
                 prepared = desk.books[sym].strategy.prepare(df)
                 new_idx = [i for i, ts in enumerate(prepared.index)

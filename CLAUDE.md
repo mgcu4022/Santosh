@@ -7,6 +7,6 @@ See README.md for architecture. Skills live in `.claude/skills/trader-*`.
 - Paper trading only. Do not add code that places real broker orders unless the user explicitly asks.
 - Every entry must go through `RiskManager.check_entry`; never bypass it.
 - Strategies may only read bars up to index `i` (no look-ahead); `tests/test_core.py` checks this.
-- Secrets (Upstox, Anthropic, Telegram) come from environment variables. Never write them to files.
+- Secrets (Upstox, Kotak, Anthropic, Telegram) come from environment variables. Never write them to files.
 - Charges, lot sizes and the NIFTY 50 list change over time; treat defaults as approximate.
 - Not investment advice. Present scans and backtests as research, not recommendations.

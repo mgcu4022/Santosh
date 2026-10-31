@@ -9,6 +9,11 @@
   deals [--symbol X]        NSE bulk/block deals (context, not signals)
   plan SYMBOL SIDE ENTRY STOP   size, risk, charges and breakeven for one trade idea
   google-sheet              print GOOGLEFINANCE formulas to paste into a Google Sheet
+  nse-bhav [--days N]       download official NSE end-of-day prices (cached in data/nse)
+  ban-list                  today's NSE F&O ban list
+  events SYMBOL             NSE results/board meetings, corporate actions, announcements
+  news [SYMBOL]             RSS headlines (all, or matched to a stock)
+  kotak-test / kotak-find   check Kotak Neo login / find an instrument token
   alert-test                send a test Telegram alert
   doctor                    check which keys/tokens are set
 """
@@ -85,6 +90,7 @@ def main(argv=None):
     sc.add_argument("--top", type=int, default=10)
     sc.add_argument("--csv-dir", default=None, help="read daily CSVs (SYMBOL.csv) instead of Yahoo")
     sc.add_argument("--google-url", default=None, help="published Google Sheet (GOOGLEFINANCE) instead of Yahoo")
+    sc.add_argument("--nse", action="store_true", help="official NSE bhavcopy data instead of Yahoo")
     sc.add_argument("--watchlist", default=None, help="write a paper-trading instruments block to this file")
     sc.add_argument("--strategy", default="orb")
     dl = sub.add_parser("deals")
@@ -107,6 +113,18 @@ def main(argv=None):
     gs.add_argument("--universe", default="config/universe_nifty50.txt")
     gs.add_argument("--start", default=None, help="YYYY-MM-DD (default: 2 years ago)")
     gs.add_argument("--exchange", default="NSE")
+    nb = sub.add_parser("nse-bhav")
+    nb.add_argument("--days", type=int, default=120, help="calendar days back (~60%% are trading days)")
+    sub.add_parser("ban-list")
+    ev = sub.add_parser("events")
+    ev.add_argument("symbol")
+    nw = sub.add_parser("news")
+    nw.add_argument("symbol", nargs="?")
+    nw.add_argument("--hours", type=int, default=48)
+    sub.add_parser("kotak-test")
+    kf = sub.add_parser("kotak-find")
+    kf.add_argument("symbol")
+    kf.add_argument("--segment", default="nse_cm", help="nse_cm, bse_cm, nse_fo")
     sub.add_parser("alert-test")
     sub.add_parser("doctor")
     args = p.parse_args(argv)
@@ -179,6 +197,45 @@ def main(argv=None):
         sys.stdout.write(sheet_layout(syms, start, args.exchange))
         print("# Paste the two rows above into cell A1 of a new Google Sheet, then "
               "File -> Share -> Publish to web -> CSV. See tradebot/data/google.py.", file=sys.stderr)
+    elif args.cmd == "nse-bhav":
+        from .data.nse import NseClient
+        data = NseClient().daily_history(args.days)
+        days = max((len(v) for v in data.values()), default=0)
+        print(f"{len(data)} stocks, up to {days} trading days, cached in data/nse/bhav/")
+    elif args.cmd == "ban-list":
+        from .data.nse import NseClient
+        ban = sorted(NseClient().ban_list())
+        print("F&O ban list: " + (", ".join(ban) if ban else "empty"))
+    elif args.cmd == "events":
+        from .data.nse import NseClient
+        nse = NseClient()
+        sym = args.symbol.upper()
+        evs = nse.events(sym)
+        print(f"=== {sym}: events (NSE) ===")
+        for e in evs[-10:]:
+            print(f"  {e['date']:%d-%b-%Y}  {e['purpose']}  {e['detail'][:100]}")
+        if not evs:
+            print("  none found")
+        print("=== latest announcements ===")
+        for a in nse.announcements(sym):
+            print(f"  {a['time']}  {a['title']}  {a['detail'][:120]}")
+    elif args.cmd == "news":
+        from .news import NewsFeed
+        nf = NewsFeed()
+        items = nf.for_symbol(args.symbol.upper(), hours=args.hours, limit=20) if args.symbol else nf.all()[:30]
+        print("Headlines are third-party news, not advice.\n")
+        for h in items:
+            when = h["published"].astimezone().strftime("%d-%b %H:%M") if h["published"] else "      "
+            print(f"  {when}  [{h['source']}] {h['title']}")
+        if not items:
+            print("  no matching headlines")
+    elif args.cmd == "kotak-test":
+        from .data.kotak import KotakNeoQuotes
+        print(KotakNeoQuotes().ltp([("2885", "nse_cm")]))   # 2885 = RELIANCE on NSE (check)
+    elif args.cmd == "kotak-find":
+        from .data.kotak import KotakNeoQuotes
+        for r in KotakNeoQuotes().find(args.symbol, args.segment):
+            print(r)
     elif args.cmd == "alert-test":
         from .alerts import TelegramNotifier
         n = TelegramNotifier()
@@ -196,7 +253,15 @@ def _scan(args):
     from .scanner import ScanConfig, load_universe, run_scan, watchlist_yaml
     syms = load_universe(args.universe)
     data, failed = {}, []
-    if args.google_url:
+    if args.nse:
+        from .data.nse import NseClient
+        bhav = NseClient().daily_history(150)
+        for s in syms:
+            if s in bhav:
+                data[s] = bhav[s]
+            else:
+                failed.append(s)
+    elif args.google_url:
         from .data.google import GoogleSheetData
         sheet = GoogleSheetData(args.google_url).all()
         for s in syms:

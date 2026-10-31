@@ -25,6 +25,7 @@ class InstrumentSpec:
     strategy_cfg: dict
     source: dict
     data_key: str
+    backup: dict = None          # e.g. {kotak_token: "2885", kotak_segment: nse_cm}
 
 
 def load_config(path: str) -> dict:
@@ -39,9 +40,10 @@ def parse_instruments(cfg: dict) -> list[InstrumentSpec]:
         strat = raw.pop("strategy")
         source = raw.pop("source", {"type": "synthetic"})
         data_key = raw.pop("data_key", "") or raw.get("instrument_key", "")
+        backup = raw.pop("backup", None) or {}
         raw["segment"] = Segment(raw.get("segment", "EQ"))
         raw["product"] = Product(raw.get("product", "INTRADAY"))
-        specs.append(InstrumentSpec(Instrument(**raw), strat, source, data_key))
+        specs.append(InstrumentSpec(Instrument(**raw), strat, source, data_key, backup))
     return specs
 
 
@@ -135,4 +137,6 @@ def env_check() -> dict:
     return {"UPSTOX_ACCESS_TOKEN": bool(os.environ.get("UPSTOX_ACCESS_TOKEN")),
             "ANTHROPIC_API_KEY": bool(os.environ.get("ANTHROPIC_API_KEY")),
             "TELEGRAM_BOT_TOKEN": bool(os.environ.get("TELEGRAM_BOT_TOKEN")),
-            "TELEGRAM_CHAT_ID": bool(os.environ.get("TELEGRAM_CHAT_ID"))}
+            "TELEGRAM_CHAT_ID": bool(os.environ.get("TELEGRAM_CHAT_ID")),
+            "KOTAK_CONSUMER_KEY": bool(os.environ.get("KOTAK_CONSUMER_KEY")),
+            "KOTAK_MOBILE/UCC/MPIN": all(os.environ.get(k) for k in ("KOTAK_MOBILE", "KOTAK_UCC", "KOTAK_MPIN"))}

@@ -30,7 +30,8 @@ class Book:
 
 class TradingDesk:
     def __init__(self, books: list[Book], risk: RiskManager, broker: PaperBroker,
-                 analyst: Optional[AIAnalyst] = None, live_clock: bool = False, notifier=None):
+                 analyst: Optional[AIAnalyst] = None, live_clock: bool = False, notifier=None,
+                 context=None):
         self.books = {b.instrument.symbol: b for b in books}
         self.risk = risk
         self.broker = broker
@@ -38,6 +39,7 @@ class TradingDesk:
         self.live_clock = live_clock
         self.journal: list[dict] = []
         self.notifier = notifier
+        self.context = context          # MarketContext: ban list, events, news (paper mode)
         self._halt_announced = None
 
     def log(self, ts, symbol, event, **details):
@@ -100,13 +102,19 @@ class TradingDesk:
 
     def _try_enter(self, sig: Signal, history: pd.DataFrame) -> None:
         inst, ts = sig.instrument, sig.timestamp
+        if self.context is not None:
+            ok, why = self.context.guard(sig)
+            if not ok:
+                self.log(ts, inst.symbol, "EVENT_BLOCK", side=sig.side.value, why=why)
+                return
         d = self.risk.check_entry(sig, self.broker.equity(), len(self.broker.open_positions()),
                                   self.broker.used_margin(), live_clock=self.live_clock)
         if not d.approved:
             self.log(ts, inst.symbol, "RISK_BLOCK", side=sig.side.value, why=d.reason)
             return
         if self.analyst is not None and self.analyst.cfg.enabled:
-            v = self.analyst.review(sig, history)
+            extra = self.context.brief(inst.symbol) if self.context is not None else ""
+            v = self.analyst.review(sig, history, extra)
             if not v.approve:
                 self.log(ts, inst.symbol, "AI_VETO", side=sig.side.value, conf=v.confidence, why=v.reason)
                 return

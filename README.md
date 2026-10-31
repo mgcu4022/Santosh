@@ -104,6 +104,40 @@ everything and stop trading.
 3. `export TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=...`, then `python -m tradebot alert-test`.
 4. Set `alerts: {telegram: true}` in your config. You'll get entries, exits, AI vetoes and kill-switch alerts.
 
+## Official NSE data and news (free)
+
+| Command | What it gets |
+|---|---|
+| `python -m tradebot nse-bhav --days 150` | NSE **Bhavcopy**: official end-of-day prices for every stock (cached in `data/nse/`) |
+| `python -m tradebot scan --nse` | Scanner on official NSE prices instead of Yahoo |
+| `python -m tradebot ban-list` | Today's **F&O ban list** |
+| `python -m tradebot events INFY` | Results/board meetings, dividends/splits, latest announcements |
+| `python -m tradebot news [SYMBOL]` | RSS headlines (Economic Times, Moneycontrol, Business Standard, Mint) |
+
+In paper trading, turn on `context: {enabled: true}` and the desk will:
+- block new **F&O** entries in stocks on the ban list (NSE's rule; `ban_blocks: all` also blocks cash),
+- block entries in a stock on its **results / board-meeting day**,
+- give the AI analyst the official events and recent headlines for that stock.
+
+Backtests don't use this: past ban lists aren't available, and old headlines would leak hindsight.
+NSE's site blocks obvious bots, so the client uses a browser-like session and pauses between calls.
+If NSE changes a file format, only the small parsers in `tradebot/data/nse.py` need updating.
+
+## Kotak Neo backup (optional, free for Kotak clients)
+
+If Upstox fails 3 times in a row for a stock (expired token, outage), paper trading switches that
+stock to **Kotak Neo** prices and builds 5-minute candles from them. It retries Upstox every few
+minutes and switches back, with a Telegram alert each time. Kotak Neo has no historical candles,
+so it is a live backup only; warm-up history falls back to Yahoo.
+
+1. Install the SDK: `pip install "git+https://github.com/Kotak-Neo/kotak-neo-api.git#egg=neo_api_client" pyotp`
+2. Get your consumer key from the Neo API section of Kotak Neo, then set
+   `KOTAK_CONSUMER_KEY`, `KOTAK_MOBILE`, `KOTAK_UCC`, `KOTAK_MPIN` (and optionally `KOTAK_TOTP_SECRET`).
+3. `python -m tradebot kotak-test`, then `python -m tradebot kotak-find RELIANCE` for tokens.
+4. Add `backup: {kotak_token: "...", kotak_segment: nse_cm}` to each instrument.
+
+Candles built from quotes are approximate (highs/lows between polls are missed; volume is 0).
+
 ## Google Finance data (optional, free)
 
 Google has no public Finance API, so this uses a Google Sheet with the `GOOGLEFINANCE()` function:
@@ -149,9 +183,9 @@ tradebot/
   agents/       desk (orchestrator), AI analyst
   strategies/   orb, ema_crossover, supertrend (+ base class to add your own)
   brokers/      broker interface, paper broker
-  data/         CSV loader, Upstox client, Yahoo and Google Finance (free), synthetic data
+  data/         Upstox, Kotak Neo (backup), NSE official, Yahoo, Google Finance, CSV, synthetic
   risk.py  costs.py  indicators.py  backtest.py  metrics.py  paper_live.py  cli.py
-  scanner.py  deals.py  alerts.py  plan.py
+  scanner.py  deals.py  alerts.py  plan.py  news.py  context.py
 .claude/skills/   the six /trader-* skills
 config/example.yaml
 tests/

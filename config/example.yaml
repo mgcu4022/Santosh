@@ -35,6 +35,16 @@ analyst:                    # Claude AI review of each entry (needs ANTHROPIC_AP
   on_error: approve         # or "veto" to block trades when the AI is unreachable
   max_calls_per_day: 50
 
+context:                    # paper mode only: official NSE data + news
+  enabled: true
+  ban_list: true            # NSE F&O ban list, loaded at start
+  ban_blocks: fno           # fno = no new F&O trades in banned stocks (NSE rule); all = cash too
+  events: true              # results/board meetings, corporate actions from NSE
+  block_on_results_day: true
+  news: true                # RSS headlines passed to the AI analyst
+  news_hours: 48
+  news_aliases: {}          # e.g. {HDFCBANK: ["HDFC Bank"]}
+
 alerts:                     # paper mode only
   telegram: false           # needs TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
   console: true
@@ -52,6 +62,7 @@ instruments:
     segment: EQ
     product: INTRADAY
     instrument_key: "NSE_EQ|INE002A01018"
+    backup: {kotak_token: "2885", kotak_segment: nse_cm}   # Kotak Neo fallback (check token: kotak-find)
     strategy: {name: orb, range_minutes: 15, reward_risk: 2}
     source: {type: upstox}          # or {type: csv, path: data/RELIANCE_5.csv}
 

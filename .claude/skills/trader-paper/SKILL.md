@@ -11,15 +11,18 @@ Paper only. This project sends **no real orders**.
    login flow). Telegram alerts need `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
    (`python -m tradebot alert-test` to verify). Never ask the user to paste tokens into chat
    or commit them; they go in environment variables.
-2. Config: instruments need real `instrument_key`s (`python -m tradebot find-key SYMBOL`).
+2. Recommend `context: {enabled: true}` (F&O ban list, results-day block, news for the AI analyst)
+   and a Kotak Neo `backup:` per instrument so an expired Upstox token doesn't stop the session
+   (`python -m tradebot kotak-test` to verify the Kotak login).
+3. Config: instruments need real `instrument_key`s (`python -m tradebot find-key SYMBOL`).
    Turn on alerts with `alerts: {telegram: true}` (or `console: true`).
-3. Start during market hours (09:15-15:30 IST, weekdays):
+4. Start during market hours (09:15-15:30 IST, weekdays):
    ```bash
    python -m tradebot paper -c config/my.yaml -v
    ```
    It skips candles that closed before start, squares off intraday at 15:15 and stops after 15:30.
-4. Kill switch: `touch runs/paper_<time>/STOP` closes everything and halts new trades.
-5. After the session, suggest /trader-journal.
+5. Kill switch: `touch runs/paper_<time>/STOP` closes everything and halts new trades.
+6. After the session, suggest /trader-journal.
 
 If the user asks for live trading: explain it needs a live broker adapter (not built), SEBI's
 retail-algo setup (static IP, algo ID via the broker) and months of consistent paper results first.

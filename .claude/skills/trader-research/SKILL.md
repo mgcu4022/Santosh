@@ -7,12 +7,15 @@ description: Research one NSE/BSE stock before a trade - latest news, quarterly 
 
 Goal: find reasons a trade in this stock could be unusually risky *today*. Not a buy/sell call.
 
-1. **Bulk/block deals** (who is buying or selling large size):
+1. **Official NSE data first** (primary sources beat news sites):
    ```bash
-   python -m tradebot deals --symbol SYMBOL
+   python -m tradebot ban-list              # F&O ban list
+   python -m tradebot events SYMBOL         # results/board meetings, corporate actions, announcements
+   python -m tradebot deals --symbol SYMBOL # bulk/block deals
+   python -m tradebot news SYMBOL           # RSS headlines from Indian business media
    ```
-   If NSE blocks the download, say so and continue.
-2. **Web search** (use the search tool; prefer nseindia.com, bseindia.com, company IR pages,
+   If NSE blocks a request, say so and fall back to web search for that item.
+2. **Web search** only to fill gaps or confirm (use the search tool; prefer nseindia.com, bseindia.com, company IR pages,
    and established Indian business news). Check, for today and the next 2 trading days:
    - board meeting / quarterly results date, dividend/split/bonus record date
    - F&O ban list, ASM/GSM surveillance, SEBI or exchange action

@@ -4,3 +4,5 @@ PyYAML>=6.0
 requests>=2.31
 anthropic>=2.0    # optional: only for the AI analyst agent
 pytest>=8.0       # tests
+# optional, Kotak Neo backup data:
+#   pip install "git+https://github.com/Kotak-Neo/kotak-neo-api.git#egg=neo_api_client" pyotp
