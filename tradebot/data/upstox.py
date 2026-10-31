@@ -33,6 +33,9 @@ class UpstoxError(RuntimeError):
 
 class UpstoxData:
     def __init__(self, access_token: str | None = None, timeout: float = 15.0):
+        if not access_token and not os.environ.get("UPSTOX_ACCESS_TOKEN"):
+            from ..upstox_auth import token_from_keyring
+            access_token = token_from_keyring()
         self.token = access_token or os.environ.get("UPSTOX_ACCESS_TOKEN", "")
         self.timeout = timeout
         self.session = requests.Session()

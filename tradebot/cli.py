@@ -14,6 +14,8 @@
   events SYMBOL             NSE results/board meetings, corporate actions, announcements
   news [SYMBOL]             RSS headlines (all, or matched to a stock)
   kotak-test / kotak-find   check Kotak Neo login / find an instrument token
+  upstox-login              daily Upstox browser login (prints/stores today's token)
+  report                    multi-day paper-trading report and verdict
   alert-test                send a test Telegram alert
   doctor                    check which keys/tokens are set
 """
@@ -66,7 +68,29 @@ def _print_result(res, out: Path | None):
         print(f"\nSaved trades, journal, equity curve to {out}/")
 
 
+def load_dotenv(path: str = ".env") -> None:
+    """Read KEY=VALUE lines from a private .env file you created (git-ignored).
+
+    Scheduled tasks don't inherit your terminal's variables; this lets them find your keys.
+    Existing environment variables always win. Nothing is ever written to the file.
+    """
+    import os
+    f = Path(path)
+    if not f.exists():
+        return
+    for line in f.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        val = val.strip()
+        val = "" if val.startswith("#") else val.split(" #")[0].strip().strip('"').strip("'")
+        if key.strip() and val and key.strip() not in os.environ:
+            os.environ[key.strip()] = val
+
+
 def main(argv=None):
+    load_dotenv()
     p = argparse.ArgumentParser(prog="tradebot", description="Indian market trading agents (backtest + paper)")
     p.add_argument("-v", "--verbose", action="store_true")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -80,6 +104,8 @@ def main(argv=None):
     pp = sub.add_parser("paper")
     pp.add_argument("-c", "--config", required=True)
     pp.add_argument("--poll", type=int, default=20)
+    pp.add_argument("--login", action="store_true", help="open the Upstox login page first (daily token)")
+    pp.add_argument("--login-timeout", type=float, default=10, help="minutes to wait for the login")
     f = sub.add_parser("fetch")
     f.add_argument("-c", "--config", required=True)
     k = sub.add_parser("find-key")
@@ -125,6 +151,15 @@ def main(argv=None):
     kf = sub.add_parser("kotak-find")
     kf.add_argument("symbol")
     kf.add_argument("--segment", default="nse_cm", help="nse_cm, bse_cm, nse_fo")
+    ul = sub.add_parser("upstox-login")
+    ul.add_argument("--keyring", action="store_true", help="store token in the OS password store (pip install keyring)")
+    ul.add_argument("--no-browser", action="store_true")
+    rp = sub.add_parser("report")
+    rp.add_argument("--runs", default="runs")
+    rp.add_argument("--from", dest="from_", default=None)
+    rp.add_argument("--to", default=None)
+    rp.add_argument("--out", default=None, help="write the report as Markdown (default runs/report.md)")
+    rp.add_argument("--telegram", action="store_true", help="also send a short summary to Telegram")
     sub.add_parser("alert-test")
     sub.add_parser("doctor")
     args = p.parse_args(argv)
@@ -148,7 +183,8 @@ def main(argv=None):
         _print_result(res, Path(args.out or f"runs/backtest_{stamp}"))
     elif args.cmd == "paper":
         from .paper_live import run_paper
-        run_paper(load_config(args.config), poll_seconds=args.poll)
+        run_paper(load_config(args.config), poll_seconds=args.poll, login=args.login,
+                  login_timeout_min=args.login_timeout)
     elif args.cmd == "fetch":
         from .data.upstox import UpstoxData
         cfg = load_config(args.config)
@@ -236,6 +272,36 @@ def main(argv=None):
         from .data.kotak import KotakNeoQuotes
         for r in KotakNeoQuotes().find(args.symbol, args.segment):
             print(r)
+    elif args.cmd == "upstox-login":
+        from .upstox_auth import check_token, interactive_login, save_to_keyring
+        token = interactive_login(open_browser=not args.no_browser)
+        if not token:
+            print("No login received.")
+            return 1
+        print(f"Logged in as {check_token(token)}. Token valid until ~3:30 AM IST tomorrow.")
+        if args.keyring:
+            save_to_keyring(token)
+            print("Saved to the OS password store; tradebot will pick it up automatically today.")
+        else:
+            print("To use it in this terminal:\n  export UPSTOX_ACCESS_TOKEN=" + token)
+    elif args.cmd == "report":
+        from .report import compute, load_runs, render
+        rd = load_runs(args.runs, args.from_, args.to)
+        if not rd.days:
+            print(f"No paper runs found in {args.runs}/ yet.")
+            return 0
+        res = compute(rd)
+        text = render(res)
+        print(text)
+        if args.telegram:
+            from .alerts import TelegramNotifier
+            from .report import short_summary
+            n = TelegramNotifier()
+            n.send(short_summary(res))
+            n.close()
+        out = Path(args.out or Path(args.runs) / "report.md")
+        out.write_text(text)
+        print(f"Saved to {out}")
     elif args.cmd == "alert-test":
         from .alerts import TelegramNotifier
         n = TelegramNotifier()

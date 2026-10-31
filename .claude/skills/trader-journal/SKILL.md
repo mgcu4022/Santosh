@@ -5,7 +5,9 @@ description: Review a paper-trading or backtest journal - what traded, why, what
 
 # Trader journal (review)
 
-1. Find the latest run: `ls -t runs/ | head`. Read `trades.csv` and `journal.csv` with pandas.
+1. For the whole paper test so far, run `python -m tradebot report` (all days combined, with a verdict).
+   For a single day, find the run with `ls -t runs/ | head` and read its `trades.csv` and `journal.csv`.
+   Always quote the report's verdict and the trade count toward 100.
 2. Summarise in under 15 lines:
    - trades, wins/losses, net P&L, total charges (and charges as % of gross P&L)
    - best and worst trade with their entry reason
@@ -15,5 +17,7 @@ description: Review a paper-trading or backtest journal - what traded, why, what
    - losses clustered at a time of day (e.g. first 30 min) or in one symbol
    - many square-off exits = targets too far for intraday
    - many "Size below 1 lot" blocks = capital too small for that F&O instrument
-4. End with **one** concrete, testable change (e.g. "skip entries before 09:30, then backtest it
+4. Don't call results meaningful before the report says enough data; with a t-statistic below 2, say they
+   could be luck.
+5. End with **one** concrete, testable change (e.g. "skip entries before 09:30, then backtest it
    with /trader-backtest"). One change at a time, tested before it is adopted.

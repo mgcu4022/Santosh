@@ -13,6 +13,7 @@ closed and no new trades are taken.
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import date, datetime, timedelta
@@ -125,7 +126,27 @@ def warmup_history(spec, interval: int, days: int, upstox) -> pd.DataFrame:
         return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
 
 
-def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_days: int = 10) -> None:
+def is_trading_day(d: date, holidays: set[str]) -> bool:
+    return d.weekday() < 5 and d.isoformat() not in holidays
+
+
+def run_dir_for_today(out_dir: str, now: datetime) -> Path:
+    """runs/paper_YYYYMMDD, or _2, _3... if the bot is restarted the same day."""
+    base = Path(out_dir) / f"paper_{now:%Y%m%d}"
+    run, n = base, 1
+    while run.exists():
+        n += 1
+        run = base.with_name(f"{base.name}_{n}")
+    return run
+
+
+def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_days: int = 10,
+              login: bool = False, login_timeout_min: float = 10) -> None:
+    holidays = {str(h) for h in cfg.get("holidays", [])}
+    if not is_trading_day(datetime.now(IST).date(), holidays):
+        log.warning("Not a trading day (weekend or holiday in config). Exiting.")
+        print("Not a trading day (weekend or holiday). Nothing to do.")
+        return
     from .alerts import build_notifier
     from .context import ContextConfig, MarketContext
 
@@ -138,9 +159,17 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
     tf = cfg.get("timeframe", {"unit": "minutes", "interval": 5})
     if tf["unit"] != "minutes":
         raise ValueError("Paper trading supports minute candles only")
-    holidays = {str(h) for h in cfg.get("holidays", [])}
 
-    upstox = UpstoxData()
+    token = None
+    if login:
+        from .upstox_auth import interactive_login
+        token = interactive_login(login_timeout_min, notify=notifier.send if notifier else None)
+        if token is None:
+            msg = "[PAPER] No Upstox login; continuing on backup data (Kotak Neo) where configured."
+            log.warning(msg)
+            if notifier:
+                notifier.send(msg)
+    upstox = UpstoxData(access_token=token)
     kotak = None
     if any(s.backup for s in specs):
         from .data.kotak import KotakNeoQuotes
@@ -148,8 +177,12 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
     feed = LiveFeed(specs, tf["interval"], upstox, kotak,
                     notify=notifier.send if notifier else (lambda m: log.warning(m)))
 
-    run = Path(out_dir) / f"paper_{datetime.now(IST):%Y%m%d_%H%M}"
+    run = run_dir_for_today(out_dir, datetime.now(IST))
     run.mkdir(parents=True, exist_ok=True)
+    (run / "meta.json").write_text(json.dumps({
+        "capital": cfg.get("capital", 500_000), "started": datetime.now(IST).isoformat(),
+        "symbols": symbols, "strategies": {i["symbol"]: i["strategy"]["name"] for i in cfg["instruments"]},
+    }, indent=2))
     stop_file = run / "STOP"
     log.info("Paper trading started. Kill switch: touch %s", stop_file)
     if context is not None and context.banned:

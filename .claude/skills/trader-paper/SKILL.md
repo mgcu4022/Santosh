@@ -16,10 +16,13 @@ Paper only. This project sends **no real orders**.
    (`python -m tradebot kotak-test` to verify the Kotak login).
 3. Config: instruments need real `instrument_key`s (`python -m tradebot find-key SYMBOL`).
    Turn on alerts with `alerts: {telegram: true}` (or `console: true`).
-4. Start during market hours (09:15-15:30 IST, weekdays):
+4. Start during market hours (09:15-15:30 IST, weekdays). `--login` opens the daily Upstox login:
    ```bash
-   python -m tradebot paper -c config/my.yaml -v
+   python -m tradebot paper -c config/my.yaml --login -v
    ```
+   For the multi-month test, schedule `scripts/run_paper.bat` (Windows Task Scheduler) or
+   `scripts/run_paper.sh` (cron) for 09:00 IST weekdays; README "Running the 2–3 month paper test"
+   has the exact commands. Keys go in the user's own git-ignored `.env`.
    It skips candles that closed before start, squares off intraday at 15:15 and stops after 15:30.
 5. Kill switch: `touch runs/paper_<time>/STOP` closes everything and halts new trades.
 6. After the session, suggest /trader-journal.

@@ -72,16 +72,46 @@ python -m tradebot backtest -c config/daily_yahoo.yaml   # free daily backtest
 The demo uses **random synthetic prices**, so it should lose about what it pays in charges.
 That's the expected result: on random data no strategy has an edge.
 
+## Running the 2–3 month paper test
+
+**One-time setup (about 30 minutes, on your PC):**
+1. Install Python 3.11+, then in this folder: `python -m venv .venv`, activate it, `pip install -r requirements.txt`.
+2. Upstox developer console → create an app → Redirect URL `http://127.0.0.1:5055/callback`.
+3. Copy `.env.example` to `.env` and fill in `UPSTOX_API_KEY`, `UPSTOX_API_SECRET` (plus Telegram/Kotak/Anthropic if used).
+   `.env` is git-ignored; never share it.
+4. Make `config/my.yaml` from `config/example.yaml` (3–5 stocks; instrument keys via `find-key`).
+5. Test once: `python -m tradebot paper -c config/my.yaml --login -v` during market hours.
+6. Schedule it for 09:00 IST on weekdays:
+   - **Windows:** `schtasks /create /tn "tradebot paper" /tr "C:\path\to\Santosh\scripts\run_paper.bat" /sc weekly /d MON,TUE,WED,THU,FRI /st 09:00`
+   - **Linux/macOS:** `crontab -e`, add `CRON_TZ=Asia/Kolkata` and `0 9 * * 1-5 /path/to/Santosh/scripts/run_paper.sh config/my.yaml`
+   - Set the PC to never sleep during market hours.
+
+**Every trading day (about 30 seconds):** at 09:00 the browser opens the Upstox login page. Log in (PIN/OTP),
+and trading starts by itself. Upstox requires this daily login; it can't be skipped. If you miss it, the bot waits
+10 minutes, then continues on Kotak Neo backup data if configured. It stops after 15:30 and sends a Telegram summary.
+Logs: `runs/logs/<date>.log`. Weekends and holidays listed in the config are skipped.
+
+**Every week:** `python -m tradebot report` (or `/trader-journal` in Claude Code). It combines all days and shows:
+progress toward 100 trades, P&L after charges, win rate, profit factor, drawdown, losing streaks, results by
+strategy, stock, exit reason and entry hour, and a strict verdict:
+
+| Verdict | Meaning |
+|---|---|
+| NOT ENOUGH DATA | Fewer than 100 trades or 40 trading days. Keep going. |
+| LOSING after charges | Don't trade real money with this setup. |
+| Barely profitable | Profit factor below 1.2: too thin to survive real slippage. |
+| Could be luck | Profitable, but the t-statistic is below 2. |
+| PASSES | Next step: small real-money test (₹50k–1L) for 1–2 months. |
+
+Change one thing at a time, and only after backtesting it. Changing rules mid-test resets the evidence.
+
 ## Using real data (Upstox)
 
 Of SBI Securities, Kotak and Upstox, Upstox has the best free API, so it's the data source here.
 
 1. Create an app at the [Upstox developer console](https://account.upstox.com/developer/apps) (free).
-2. Get a daily access token with the Upstox login (OAuth) flow. It expires each morning around 3:30 AM IST.
-3. Set it in your shell (never commit it):
-   ```bash
-   export UPSTOX_ACCESS_TOKEN=...
-   ```
+2. Log in daily: `python -m tradebot upstox-login` opens the browser and prints today's token
+   (or use `paper --login`, which does this automatically). Tokens expire around 3:30 AM IST.
 4. Find instrument keys:
    ```bash
    python -m tradebot find-key RELIANCE                  # NSE_EQ|INE002A01018
@@ -187,7 +217,8 @@ tradebot/
   brokers/      broker interface, paper broker
   data/         Upstox, Kotak Neo (backup), NSE official, Yahoo, Google Finance, CSV, synthetic
   risk.py  costs.py  indicators.py  backtest.py  metrics.py  paper_live.py  cli.py
-  scanner.py  deals.py  alerts.py  plan.py  news.py  context.py
+  scanner.py  deals.py  alerts.py  plan.py  news.py  context.py  report.py  upstox_auth.py
+scripts/          run_paper.bat (Windows) / run_paper.sh (cron) for the daily auto-start
 .claude/skills/   the six /trader-* skills
 config/example.yaml
 tests/
