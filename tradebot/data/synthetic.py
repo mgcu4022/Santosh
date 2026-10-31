@@ -37,3 +37,19 @@ def synthetic_intraday(days: int = 60, start_price: float = 2500.0, interval_min
             price = c
     df = pd.DataFrame(rows, columns=["datetime", "open", "high", "low", "close", "volume"])
     return df.set_index("datetime").round(2)
+
+
+def synthetic_daily(days: int = 300, start_price: float = 1000.0, daily_vol: float = 0.018,
+                    seed: int = 11, start: str = "2025-01-01") -> pd.DataFrame:
+    """Random-walk daily candles (one bar per weekday)."""
+    rng = np.random.default_rng(seed)
+    idx = pd.bdate_range(start, periods=days, tz=IST)
+    r = rng.normal(0, daily_vol, days)
+    close = start_price * np.exp(np.cumsum(r))
+    open_ = np.r_[start_price, close[:-1]] * np.exp(rng.normal(0, daily_vol / 3, days))
+    wick = np.abs(rng.normal(0, daily_vol / 2, days)) * close
+    df = pd.DataFrame({
+        "open": open_, "high": np.maximum(open_, close) + wick, "low": np.minimum(open_, close) - wick,
+        "close": close, "volume": rng.integers(500_000, 3_000_000, days).astype(float)}, index=idx)
+    df.index.name = "datetime"
+    return df.round(2)

@@ -1,0 +1,13 @@
+# Swing/positional backtest on free Yahoo daily data (no accounts needed).
+#   python -m tradebot backtest -c config/daily_yahoo.yaml
+capital: 1000000
+timeframe: {unit: days, interval: 1}
+backtest: {from: 2023-01-01}
+risk: {risk_per_trade_pct: 1.0, max_position_pct: 20, max_open_positions: 5}
+instruments:
+  - {symbol: RELIANCE, product: DELIVERY, source: {type: yahoo},
+     strategy: {name: ema_crossover, fast: 20, slow: 50, atr_stop: 2.0, reward_risk: 3}}
+  - {symbol: HDFCBANK, product: DELIVERY, source: {type: yahoo},
+     strategy: {name: supertrend, period: 10, multiplier: 3}}
+  - {symbol: INFY, product: DELIVERY, source: {type: yahoo},
+     strategy: {name: ema_crossover, fast: 20, slow: 50, atr_stop: 2.0, reward_risk: 3}}

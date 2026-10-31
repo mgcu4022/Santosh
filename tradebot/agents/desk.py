@@ -30,18 +30,26 @@ class Book:
 
 class TradingDesk:
     def __init__(self, books: list[Book], risk: RiskManager, broker: PaperBroker,
-                 analyst: Optional[AIAnalyst] = None, live_clock: bool = False):
+                 analyst: Optional[AIAnalyst] = None, live_clock: bool = False, notifier=None):
         self.books = {b.instrument.symbol: b for b in books}
         self.risk = risk
         self.broker = broker
         self.analyst = analyst
         self.live_clock = live_clock
         self.journal: list[dict] = []
+        self.notifier = notifier
+        self._halt_announced = None
 
     def log(self, ts, symbol, event, **details):
         row = {"time": ts, "symbol": symbol, "event": event, **details}
         self.journal.append(row)
         log.info("%s %-12s %-10s %s", ts, symbol, event, details)
+        if self.notifier is not None and self.notifier.wants(event):
+            from ..alerts import format_event
+            try:
+                self.notifier.send(format_event(event, symbol, details))
+            except Exception as e:   # alerts must never stop trading
+                log.warning("alert failed: %s", e)
 
     # ------------------------------------------------------------------
     def on_bar(self, symbol: str, df: pd.DataFrame, i: int) -> None:
@@ -63,6 +71,9 @@ class TradingDesk:
 
         # Kill switch: flatten and stop.
         if self.risk.halted:
+            if self._halt_announced != ts.date():
+                self._halt_announced = ts.date()
+                self.log(ts, "ALL", "HALT", why=self.risk.halt_reason)
             if pos:
                 self.broker.cancel_all(symbol)
                 self._flatten(inst, c, ts, "daily-loss halt" if "Daily loss" in self.risk.halt_reason else "kill switch")

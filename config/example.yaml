@@ -35,6 +35,11 @@ analyst:                    # Claude AI review of each entry (needs ANTHROPIC_AP
   on_error: approve         # or "veto" to block trades when the AI is unreachable
   max_calls_per_day: 50
 
+alerts:                     # paper mode only
+  telegram: false           # needs TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
+  console: true
+  events: [ENTRY_SIG, CLOSED, AI_VETO, HALT]
+
 charges: {}                 # override rates, e.g. {fut: {stt_sell: 0.0005}}
 
 holidays:                   # NSE trading holidays (paper mode skips these). Update yearly.

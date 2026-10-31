@@ -31,12 +31,40 @@ Strategies included:
 - **ema_crossover**: EMA 9/21 cross, ATR stop, 2:1 target
 - **supertrend**: Supertrend flip with trailing stop
 
+## Claude skills (chat with it)
+
+Open this repo in Claude Code and type a command. Each skill runs the tested Python engine,
+so Claude explains the numbers instead of guessing them.
+
+| Skill | Does | Engine command |
+|---|---|---|
+| `/trader-scan` | Ranks NIFTY stocks: gaps, volume spikes, breakouts, NR7, trend | `scan` |
+| `/trader-research SYMBOL` | News, results, events, ban/ASM status, bulk/block deals → risk brief | `deals` + web search |
+| `/trader-plan` | Qty/lots, stop, target, margin, charges, breakeven, win rate needed | `plan` |
+| `/trader-backtest` | Time machine: replay past periods, honest read of results | `backtest` |
+| `/trader-paper` | Run paper trading with Telegram alerts and kill switch | `paper` |
+| `/trader-journal` | Review the day: P&L after charges, blocks, vetoes, one improvement | reads `runs/` |
+
+### Why 6 skills and not 11
+
+This was inspired by an open-source US "day-trader" skill pack with 11 skills, adapted for India
+rather than copied:
+- **Entry, exit, budget and risk** are one engine here (`/trader-plan` and the risk agent). Separate
+  skills for them could give conflicting answers.
+- **News and earnings** are merged into `/trader-research`, using NSE/BSE sources.
+- **"Pelosi tracker"** (US politicians' trades) has no Indian equivalent; NSE **bulk/block deals**
+  replace it, shown as context only, because copying disclosed deals isn't a proven intraday edge.
+- **Order executor** stays paper-only until a strategy proves itself and SEBI's retail-algo setup is done.
+
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
 python -m tradebot demo          # synthetic data, no accounts needed
-python -m pytest -q              # 24 tests
+python -m pytest -q              # tests
+python -m tradebot scan          # today's watchlist from free Yahoo data
+python -m tradebot plan RELIANCE BUY 1400 1390   # size a trade
+python -m tradebot backtest -c config/daily_yahoo.yaml   # free daily backtest
 ```
 
 The demo uses **random synthetic prices**, so it should lose about what it pays in charges.
@@ -68,6 +96,14 @@ Paper trading writes `journal.csv` (every signal, block, veto, fill) and `trades
 `runs/paper_<time>/`. **Kill switch:** create a file named `STOP` in that folder to close
 everything and stop trading.
 
+## Telegram alerts (optional)
+
+1. On Telegram, message **@BotFather**, send `/newbot`, copy the token.
+2. Send any message to your new bot, then open `https://api.telegram.org/bot<TOKEN>/getUpdates`
+   and copy the `chat` → `id` number.
+3. `export TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=...`, then `python -m tradebot alert-test`.
+4. Set `alerts: {telegram: true}` in your config. You'll get entries, exits, AI vetoes and kill-switch alerts.
+
 ## AI analyst (optional)
 
 Set `analyst.enabled: true` in the config and export `ANTHROPIC_API_KEY`.
@@ -95,8 +131,10 @@ tradebot/
   agents/       desk (orchestrator), AI analyst
   strategies/   orb, ema_crossover, supertrend (+ base class to add your own)
   brokers/      broker interface, paper broker
-  data/         CSV loader, Upstox client, synthetic data
+  data/         CSV loader, Upstox client, Yahoo (free), synthetic data
   risk.py  costs.py  indicators.py  backtest.py  metrics.py  paper_live.py  cli.py
+  scanner.py  deals.py  alerts.py  plan.py
+.claude/skills/   the six /trader-* skills
 config/example.yaml
 tests/
 ```
@@ -105,5 +143,4 @@ tests/
 
 - Live order adapter for Upstox (and Kotak Neo) behind the same `Broker` interface
 - Option strategies on index signals (pick ATM/OTM strike from the option chain)
-- Telegram alerts for signals and fills
 - Walk-forward testing and parameter sweeps

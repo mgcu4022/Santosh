@@ -35,7 +35,9 @@ def completed(df: pd.DataFrame, interval_min: int, now: datetime) -> pd.DataFram
 
 
 def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_days: int = 10) -> None:
-    desk, specs = build_desk(cfg, live_clock=True)
+    from .alerts import build_notifier
+    notifier = build_notifier(cfg.get("alerts"))
+    desk, specs = build_desk(cfg, live_clock=True, notifier=notifier)
     tf = cfg.get("timeframe", {"unit": "minutes", "interval": 5})
     if tf["unit"] != "minutes":
         raise ValueError("Paper trading supports minute candles only")
@@ -95,6 +97,9 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
         log.info("Stopped by user.")
     finally:
         _save(desk, run)
+        if notifier is not None:
+            notifier.send(f"[PAPER] Day end: equity Rs{desk.broker.equity():,.0f}, trades {len(desk.broker.trades)}")
+            notifier.close()
         log.info("Equity Rs%.2f | trades %d | saved to %s", desk.broker.equity(), len(desk.broker.trades), run)
 
 
