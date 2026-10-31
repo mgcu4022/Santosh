@@ -1,0 +1,71 @@
+# Example config. Copy it, edit, then run:
+#   python -m tradebot backtest -c config/my.yaml
+#   python -m tradebot paper    -c config/my.yaml
+#
+# All numbers below (lot sizes, margins, charges) change over time.
+# Check them against NSE circulars and your broker before relying on results.
+
+capital: 1000000            # Rs 10 lakh paper capital
+timeframe: {unit: minutes, interval: 5}
+slippage_bps: 2             # 0.02% against you on every market fill
+
+backtest:
+  from: 2026-07-01
+  to: 2026-10-30
+
+risk:
+  risk_per_trade_pct: 1.0   # lose at most 1% of equity if a stop is hit
+  max_position_pct: 25      # margin per position, % of equity
+  max_open_positions: 4
+  max_daily_loss_pct: 3.0   # kill switch: flatten and stop for the day
+  max_trades_per_day: 15
+  no_entry_before: "09:20"
+  no_entry_after: "15:00"
+  square_off_time: "15:15"
+  allow_option_selling: false
+  max_orders_per_second: 5  # SEBI retail-algo threshold is 10/s; stay well below
+  margin: {eq_intraday: 0.20, eq_delivery: 1.0, fut: 0.15, opt_buy: 1.0}
+
+analyst:                    # Claude AI review of each entry (needs ANTHROPIC_API_KEY)
+  enabled: false            # keep false for backtests (cost + no historical news)
+  model: claude-opus-5-5
+  effort: low
+  web_search: true
+  veto_min_confidence: 0.6
+  on_error: approve         # or "veto" to block trades when the AI is unreachable
+  max_calls_per_day: 50
+
+charges: {}                 # override rates, e.g. {fut: {stt_sell: 0.0005}}
+
+holidays:                   # NSE trading holidays (paper mode skips these). Update yearly.
+  - 2026-11-10
+
+instruments:
+  # Equity intraday
+  - symbol: RELIANCE
+    exchange: NSE
+    segment: EQ
+    product: INTRADAY
+    instrument_key: "NSE_EQ|INE002A01018"
+    strategy: {name: orb, range_minutes: 15, reward_risk: 2}
+    source: {type: upstox}          # or {type: csv, path: data/RELIANCE_5.csv}
+
+  - symbol: HDFCBANK
+    exchange: NSE
+    segment: EQ
+    product: INTRADAY
+    instrument_key: "NSE_EQ|INE040A01034"
+    strategy: {name: ema_crossover, fast: 9, slow: 21, atr_stop: 1.5, reward_risk: 2}
+    source: {type: upstox}
+
+  # Index futures. Backtest uses the index candles as a proxy for the future
+  # (ignores basis). For paper trading, set data_key to the futures key itself:
+  #   python -m tradebot find-key NIFTY --segment NSE_FO
+  - symbol: NIFTY-FUT
+    exchange: NFO
+    segment: FUT
+    product: INTRADAY
+    lot_size: 65                    # verify current NSE lot size
+    data_key: "NSE_INDEX|Nifty 50"
+    strategy: {name: supertrend, period: 10, multiplier: 3}
+    source: {type: upstox}
