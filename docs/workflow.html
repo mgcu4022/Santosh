@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading agents: automation workflow</title>
+<style>
+  :root {
+    --bg: #f7f6f2; --card: #ffffff; --text: #1f2328; --muted: #5d6470; --line: #c9ccd2;
+    --data: #2f6fd6; --data-bg: #e8f0fc;
+    --gate: #b7791f; --gate-bg: #fdf3e1;
+    --ai: #7c4dcc; --ai-bg: #f1eafc;
+    --exec: #23874f; --exec-bg: #e5f5ec;
+    --stop: #c2413b; --stop-bg: #fbe9e8;
+    --phase: #eceae4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171b; --card: #1e2127; --text: #e6e8eb; --muted: #9aa1ac; --line: #3a3f48;
+      --data: #79a8f2; --data-bg: #1d2a40;
+      --gate: #e0a84f; --gate-bg: #352a17;
+      --ai: #b294f0; --ai-bg: #2b2140;
+      --exec: #5cc28a; --exec-bg: #183126;
+      --stop: #f0817b; --stop-bg: #3a1e1d;
+      --phase: #23262d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 20px 14px 40px; }
+  h1 { font-size: 21px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 14px; font-size: 13.5px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12.5px; color: var(--muted); margin-bottom: 18px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+                         margin-right: 5px; vertical-align: -1px; background: var(--c); }
+
+  .phase { background: var(--phase); border-radius: 14px; padding: 12px 12px 14px; margin-bottom: 8px; }
+  .phase h2 { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+              margin: 0 0 10px; display: flex; justify-content: space-between; }
+  .phase h2 b { color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0; }
+
+  .node { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--c);
+          border-radius: 10px; padding: 9px 11px; position: relative; }
+  .node .t { font-weight: 650; display: flex; align-items: center; gap: 7px; }
+  .node .t i { font-style: normal; font-size: 11px; font-weight: 600; color: var(--c); background: var(--cbg);
+               padding: 1px 7px; border-radius: 99px; }
+  .node .d { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .node code { font-size: 12px; background: var(--cbg); color: var(--c); padding: 0 4px; border-radius: 4px; }
+
+  .data { --c: var(--data); --cbg: var(--data-bg); }
+  .gate { --c: var(--gate); --cbg: var(--gate-bg); }
+  .ai   { --c: var(--ai);   --cbg: var(--ai-bg); }
+  .exec { --c: var(--exec); --cbg: var(--exec-bg); }
+  .stop { --c: var(--stop); --cbg: var(--stop-bg); }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .arrow { text-align: center; color: var(--muted); font-size: 12px; line-height: 1; padding: 4px 0; }
+  .arrow::before { content: "↓"; display: block; font-size: 18px; color: var(--line); }
+  .arrow:empty::before { margin-bottom: -2px; }
+
+  /* gate with a side exit for rejects */
+  .gatewrap { display: grid; grid-template-columns: 1fr 112px; gap: 8px; align-items: center; }
+  .reject { font-size: 12px; color: var(--stop); background: var(--stop-bg); border-radius: 8px;
+            padding: 6px 8px; position: relative; }
+  .reject::before { content: "→"; position: absolute; left: -16px; top: 50%; transform: translateY(-50%);
+                    color: var(--stop); font-weight: 700; }
+
+  .loop { border: 2px dashed var(--line); border-radius: 12px; padding: 10px; }
+  .looptag { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
+
+  .side { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .skills { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12.5px; }
+  .skills div { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+  .skills code { color: var(--ai); font-weight: 600; font-size: 12.5px; }
+  .skills span { display: block; color: var(--muted); font-size: 12px; }
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Trading agents: how one day runs</h1>
+  <p class="sub">Paper trading on NSE/BSE. Every trade passes three safety gates before a simulated order is placed.</p>
+
+  <div class="legend">
+    <span style="--c:var(--data)">Data</span>
+    <span style="--c:var(--gate)">Rule gate</span>
+    <span style="--c:var(--ai)">AI (Claude)</span>
+    <span style="--c:var(--exec)">Execution</span>
+    <span style="--c:var(--stop)">Block / stop</span>
+  </div>
+
+  <!-- PHASE 1 -->
+  <section class="phase">
+    <h2>1 · Before market <b>~08:30–09:15</b></h2>
+    <div class="row">
+      <div class="node data">
+        <div class="t">Scanner</div>
+        <div class="d">Ranks NIFTY stocks: gaps, volume spikes, breakouts, NR7. Data: NSE Bhavcopy, Yahoo or Google.</div>
+      </div>
+      <div class="node data">
+        <div class="t">Market context</div>
+        <div class="d">NSE F&amp;O ban list, results &amp; board-meeting dates, RSS headlines.</div>
+      </div>
+    </div>
+    <div class="arrow"></div>
+    <div class="node exec">
+      <div class="t">Watchlist + config ready</div>
+      <div class="d">Stocks, strategy per stock, capital, risk limits. Warm-up candles loaded (Upstox → Yahoo fallback).</div>
+    </div>
+  </section>
+
+  <div class="arrow">market opens 09:15</div>
+
+  <!-- PHASE 2 -->
+  <section class="phase">
+    <h2>2 · Trading loop <b>every 5-min candle</b></h2>
+    <div class="loop">
+      <div class="node data">
+        <div class="t">Market data <i>live</i></div>
+        <div class="d">Upstox candles. After 3 failures → <b>Kotak Neo</b> quotes built into candles; switches back when Upstox recovers.</div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="node exec">
+        <div class="t">Paper broker: manage open trades</div>
+        <div class="d">Fills pending orders at the candle's open; checks stop-loss and target (gap-aware).</div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="node gate">
+        <div class="t">Strategy agent</div>
+        <div class="d">ORB · EMA crossover · Supertrend → entry or exit signal with a stop-loss.</div>
+      </div>
+      <div class="arrow">entry signal</div>
+
+      <div class="gatewrap">
+        <div class="node gate">
+          <div class="t">Gate 1 · Event guard</div>
+          <div class="d">Stock on F&amp;O ban list? Results today?</div>
+        </div>
+        <div class="reject">EVENT_BLOCK</div>
+      </div>
+      <div class="arrow">clear</div>
+
+      <div class="gatewrap">
+        <div class="node gate">
+          <div class="t">Gate 2 · Risk agent</div>
+          <div class="d">Size = 1% risk, rounded to lots. Margin, entry window 09:20–15:00, max positions/trades, order-rate cap.</div>
+        </div>
+        <div class="reject">RISK_BLOCK</div>
+      </div>
+      <div class="arrow">approved + quantity</div>
+
+      <div class="gatewrap">
+        <div class="node ai">
+          <div class="t">Gate 3 · AI analyst <i>optional</i></div>
+          <div class="d">Claude reads price action, NSE events, headlines, web search. Can only veto.</div>
+        </div>
+        <div class="reject">AI_VETO</div>
+      </div>
+      <div class="arrow">approved</div>
+
+      <div class="node exec">
+        <div class="t">Paper order placed</div>
+        <div class="d">Fills at next candle's open + slippage. Charges: STT, brokerage, GST, stamp duty.</div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="node exec">
+        <div class="t">Journal + Telegram alert</div>
+        <div class="d">Every signal, block, veto and fill is logged to <code>journal.csv</code>.</div>
+      </div>
+      <div class="looptag">↻ repeats for each stock on every new candle</div>
+    </div>
+
+    <div class="side">
+      <div class="node stop">
+        <div class="t">Kill switch</div>
+        <div class="d">Daily loss ≥ 3% or <code>STOP</code> file → close all, no new trades.</div>
+      </div>
+      <div class="node stop">
+        <div class="t">15:15 square-off</div>
+        <div class="d">All intraday positions closed. No overnight intraday risk.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="arrow">market closes 15:30</div>
+
+  <!-- PHASE 3 -->
+  <section class="phase">
+    <h2>3 · After market <b>evening</b></h2>
+    <div class="row">
+      <div class="node exec">
+        <div class="t">Day report</div>
+        <div class="d">Trades, P&amp;L after charges, blocks, vetoes. Telegram summary.</div>
+      </div>
+      <div class="node ai">
+        <div class="t">Journal review</div>
+        <div class="d">Claude finds patterns and suggests one change to test.</div>
+      </div>
+    </div>
+    <div class="arrow"></div>
+    <div class="node gate">
+      <div class="t">Backtest the change</div>
+      <div class="d">Time machine replays past data with the same agents. Adopt only if it holds up after charges.</div>
+    </div>
+    <div class="looptag">↻ improved config feeds tomorrow's run</div>
+  </section>
+
+  <!-- SKILLS -->
+  <section class="phase" style="margin-top:14px">
+    <h2>Chat with it in Claude Code <b>6 skills</b></h2>
+    <div class="skills">
+      <div><code>/trader-scan</code><span>Phase 1 · watchlist</span></div>
+      <div><code>/trader-research</code><span>Phase 1 · news, results, ban</span></div>
+      <div><code>/trader-plan</code><span>Size one trade idea</span></div>
+      <div><code>/trader-paper</code><span>Phase 2 · run the loop</span></div>
+      <div><code>/trader-journal</code><span>Phase 3 · review</span></div>
+      <div><code>/trader-backtest</code><span>Phase 3 · test changes</span></div>
+    </div>
+  </section>
+
+  <p class="note">Paper trading only: no real orders are sent. Research tool, not investment advice.</p>
+</main>
+</body>
+</html>

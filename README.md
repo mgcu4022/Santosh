@@ -10,6 +10,8 @@ Claude AI analyst can veto trades based on news and price action.
 
 ## How it works
 
+Visual overview of a full trading day: [docs/workflow.html](docs/workflow.html) (image: [docs/workflow.png](docs/workflow.png)).
+
 Each new candle passes through a chain of agents:
 
 ```
