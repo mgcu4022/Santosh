@@ -104,6 +104,24 @@ everything and stop trading.
 3. `export TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=...`, then `python -m tradebot alert-test`.
 4. Set `alerts: {telegram: true}` in your config. You'll get entries, exits, AI vetoes and kill-switch alerts.
 
+## Google Finance data (optional, free)
+
+Google has no public Finance API, so this uses a Google Sheet with the `GOOGLEFINANCE()` function:
+
+1. Generate the formulas: `python -m tradebot google-sheet > sheet.tsv` (NIFTY 50 by default,
+   or list symbols: `google-sheet RELIANCE TCS NIFTY`).
+2. New Google Sheet → click **A1** → paste the contents of `sheet.tsv`. Wait for it to fill.
+3. **File → Share → Publish to web** → choose the sheet, format **CSV** → Publish → copy the link.
+4. Use it:
+   ```bash
+   python -m tradebot scan --google-url "<link>"
+   ```
+   or in a config with `timeframe: {unit: days}`: `google_sheet_url: "<link>"` and
+   `source: {type: google}` per instrument.
+
+Limits: daily candles only (no intraday), delayed ~20 min, some symbols return `#N/A`.
+Use it for scans and daily backtests. Use Upstox for intraday and paper trading.
+
 ## AI analyst (optional)
 
 Set `analyst.enabled: true` in the config and export `ANTHROPIC_API_KEY`.
@@ -131,7 +149,7 @@ tradebot/
   agents/       desk (orchestrator), AI analyst
   strategies/   orb, ema_crossover, supertrend (+ base class to add your own)
   brokers/      broker interface, paper broker
-  data/         CSV loader, Upstox client, Yahoo (free), synthetic data
+  data/         CSV loader, Upstox client, Yahoo and Google Finance (free), synthetic data
   risk.py  costs.py  indicators.py  backtest.py  metrics.py  paper_live.py  cli.py
   scanner.py  deals.py  alerts.py  plan.py
 .claude/skills/   the six /trader-* skills

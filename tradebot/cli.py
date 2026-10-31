@@ -5,9 +5,10 @@
   paper -c CONFIG           live paper trading with Upstox market data
   fetch -c CONFIG           download history from Upstox to data/*.csv
   find-key SYMBOL           look up an Upstox instrument key
-  scan                      rank NIFTY stocks for today's watchlist (free Yahoo data)
+  scan                      rank NIFTY stocks for today's watchlist (Yahoo or Google data)
   deals [--symbol X]        NSE bulk/block deals (context, not signals)
   plan SYMBOL SIDE ENTRY STOP   size, risk, charges and breakeven for one trade idea
+  google-sheet              print GOOGLEFINANCE formulas to paste into a Google Sheet
   alert-test                send a test Telegram alert
   doctor                    check which keys/tokens are set
 """
@@ -83,6 +84,7 @@ def main(argv=None):
     sc.add_argument("--universe", default="config/universe_nifty50.txt")
     sc.add_argument("--top", type=int, default=10)
     sc.add_argument("--csv-dir", default=None, help="read daily CSVs (SYMBOL.csv) instead of Yahoo")
+    sc.add_argument("--google-url", default=None, help="published Google Sheet (GOOGLEFINANCE) instead of Yahoo")
     sc.add_argument("--watchlist", default=None, help="write a paper-trading instruments block to this file")
     sc.add_argument("--strategy", default="orb")
     dl = sub.add_parser("deals")
@@ -100,6 +102,11 @@ def main(argv=None):
     pl.add_argument("--lot", type=int, default=1)
     pl.add_argument("--capital", type=float, default=500_000)
     pl.add_argument("--risk", type=float, default=1.0, help="% of capital at risk")
+    gs = sub.add_parser("google-sheet")
+    gs.add_argument("symbols", nargs="*", help="symbols (default: --universe file)")
+    gs.add_argument("--universe", default="config/universe_nifty50.txt")
+    gs.add_argument("--start", default=None, help="YYYY-MM-DD (default: 2 years ago)")
+    gs.add_argument("--exchange", default="NSE")
     sub.add_parser("alert-test")
     sub.add_parser("doctor")
     args = p.parse_args(argv)
@@ -163,6 +170,15 @@ def main(argv=None):
                          args.product, args.lot, args.capital, args.risk)
         for k, v in plan.items():
             print(f"  {k:<20} {v}")
+    elif args.cmd == "google-sheet":
+        from datetime import date, timedelta
+        from .data.google import sheet_layout
+        from .scanner import load_universe
+        syms = [x.upper() for x in args.symbols] or load_universe(args.universe)
+        start = date.fromisoformat(args.start) if args.start else date.today() - timedelta(days=730)
+        sys.stdout.write(sheet_layout(syms, start, args.exchange))
+        print("# Paste the two rows above into cell A1 of a new Google Sheet, then "
+              "File -> Share -> Publish to web -> CSV. See tradebot/data/google.py.", file=sys.stderr)
     elif args.cmd == "alert-test":
         from .alerts import TelegramNotifier
         n = TelegramNotifier()
@@ -180,7 +196,15 @@ def _scan(args):
     from .scanner import ScanConfig, load_universe, run_scan, watchlist_yaml
     syms = load_universe(args.universe)
     data, failed = {}, []
-    if args.csv_dir:
+    if args.google_url:
+        from .data.google import GoogleSheetData
+        sheet = GoogleSheetData(args.google_url).all()
+        for s in syms:
+            if s in sheet:
+                data[s] = sheet[s]
+            else:
+                failed.append(s)
+    elif args.csv_dir:
         from .data.csv_feed import load_csv
         for s in syms:
             path = Path(args.csv_dir) / f"{s}.csv"

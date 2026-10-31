@@ -6,7 +6,8 @@ description: Backtest ("time machine") a strategy on past NSE data and interpret
 # Trader backtest (time machine)
 
 1. Pick or write a config (see `config/example.yaml`, `config/daily_yahoo.yaml`). Data sources:
-   `yahoo` (free; 5-min only ~60 days back, daily for years), `upstox` (needs token), `csv`.
+   `yahoo` (free; 5-min only ~60 days back, daily for years), `google` (free, daily only, via a
+   published GOOGLEFINANCE sheet), `upstox` (needs token), `csv`.
 2. Run, optionally replaying a specific window:
    ```bash
    python -m tradebot backtest -c config/daily_yahoo.yaml

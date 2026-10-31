@@ -80,6 +80,7 @@ def load_history(cfg: dict, specs: list[InstrumentSpec]) -> dict[str, pd.DataFra
     tf = cfg.get("timeframe", {"unit": "minutes", "interval": 5})
     bt = cfg.get("backtest", {})
     out = {}
+    google_sheets: dict = {}   # one download per sheet URL
     for n, s in enumerate(specs):
         src = s.source
         kind = src.get("type", "synthetic")
@@ -101,6 +102,16 @@ def load_history(cfg: dict, specs: list[InstrumentSpec]) -> dict[str, pd.DataFra
             if not is_daily(cfg):
                 t = df.index.time
                 df = df[(t >= time(9, 15)) & (t < time(15, 30))]
+        elif kind == "google":
+            if not is_daily(cfg):
+                raise ValueError(f"{s.instrument.symbol}: Google Finance only has daily candles; "
+                                 "set timeframe: {unit: days, interval: 1}")
+            from .data.google import GoogleSheetData
+            url = src.get("url") or cfg.get("google_sheet_url")
+            if not url:
+                raise ValueError(f"{s.instrument.symbol}: google source needs url (or top-level google_sheet_url)")
+            sheet = google_sheets.setdefault(url, GoogleSheetData(url, dayfirst=src.get("dayfirst")))
+            df = sheet.history(src.get("symbol", s.instrument.symbol))
         elif kind == "synthetic":
             if is_daily(cfg):
                 df = synthetic_daily(days=src.get("days", 500), start_price=src.get("start_price", 1000.0),

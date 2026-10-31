@@ -1,5 +1,8 @@
 # Swing/positional backtest on free Yahoo daily data (no accounts needed).
 #   python -m tradebot backtest -c config/daily_yahoo.yaml
+# To use Google Finance instead: set google_sheet_url below and change
+# source: {type: yahoo} to source: {type: google}. See README "Google Finance data".
+# google_sheet_url: "https://docs.google.com/spreadsheets/d/e/.../pub?output=csv"
 capital: 1000000
 timeframe: {unit: days, interval: 1}
 backtest: {from: 2023-01-01}
