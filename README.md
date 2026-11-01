@@ -79,7 +79,8 @@ That's the expected result: on random data no strategy has an edge.
 2. Upstox developer console → create an app → Redirect URL `http://127.0.0.1:5055/callback`.
 3. Copy `.env.example` to `.env` and fill in `UPSTOX_API_KEY`, `UPSTOX_API_SECRET` (plus Telegram/Kotak/Anthropic if used).
    `.env` is git-ignored; never share it.
-4. Make `config/my.yaml` from `config/example.yaml` (3–5 stocks; instrument keys via `find-key`).
+4. `config/my.yaml` is a ready starter (ORB on RELIANCE, HDFCBANK, ICICIBANK, INFY, SBIN; ₹5 lakh paper capital).
+   Check everything with `python -m tradebot preflight` (it must say READY).
 5. Test once: `python -m tradebot paper -c config/my.yaml --login -v` during market hours.
 6. Schedule it for 09:00 IST on weekdays:
    - **Windows:** `schtasks /create /tn "tradebot paper" /tr "C:\path\to\Santosh\scripts\run_paper.bat" /sc weekly /d MON,TUE,WED,THU,FRI /st 09:00`

@@ -53,7 +53,9 @@ alerts:                     # paper mode only
 charges: {}                 # override rates, e.g. {fut: {stt_sell: 0.0005}}
 
 holidays:                   # NSE trading holidays (paper mode skips these). Update yearly.
-  - 2026-11-10
+  - 2026-11-09              # Diwali Balipratipada
+  - 2026-11-24              # Guru Nanak Jayanti
+  - 2026-12-25              # Christmas
 
 instruments:
   # Equity intraday

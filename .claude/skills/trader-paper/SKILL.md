@@ -7,7 +7,7 @@ description: Start, monitor or stop live paper trading (real Upstox prices, simu
 
 Paper only. This project sends **no real orders**.
 
-1. Check setup: `python -m tradebot doctor`. Needs `UPSTOX_ACCESS_TOKEN` (daily, from the Upstox
+1. Check setup: `python -m tradebot preflight -c config/my.yaml` (must end with READY), or `doctor` for keys only. Needs `UPSTOX_ACCESS_TOKEN` (daily, from the Upstox
    login flow). Telegram alerts need `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
    (`python -m tradebot alert-test` to verify). Never ask the user to paste tokens into chat
    or commit them; they go in environment variables.

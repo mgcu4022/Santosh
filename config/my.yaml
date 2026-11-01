@@ -1,0 +1,65 @@
+# Starter config for the 2-3 month paper test. Used by scripts/run_paper.bat / .sh.
+# Check it on your PC before market:  python -m tradebot preflight -c config/my.yaml
+#
+# One strategy (ORB) on five liquid large caps: testing one strategy at a time
+# gives clean evidence. Don't change rules mid-test; it resets the evidence.
+
+capital: 500000             # Rs 5 lakh paper capital
+timeframe: {unit: minutes, interval: 5}
+slippage_bps: 3             # a little pessimistic on purpose
+
+risk:
+  risk_per_trade_pct: 1.0   # Rs 5,000 max loss per trade at the stop
+  max_position_pct: 25
+  max_open_positions: 3
+  max_daily_loss_pct: 3.0   # kill switch at Rs 15,000 down for the day
+  max_trades_per_day: 8
+  no_entry_before: "09:30"  # after the 15-minute opening range forms
+  no_entry_after: "14:30"
+  square_off_time: "15:15"
+
+context:                    # official NSE data + news (Nov = results season, so this matters)
+  enabled: true
+  ban_list: true
+  ban_blocks: fno
+  events: true
+  block_on_results_day: true
+  news: true
+
+analyst:                    # optional Claude review; needs ANTHROPIC_API_KEY (costs per call)
+  enabled: false
+
+alerts:
+  console: true
+  telegram: false           # set true after `python -m tradebot alert-test` works
+  events: [ENTRY_SIG, CLOSED, AI_VETO, HALT]
+
+# NSE trading holidays (weekends are skipped automatically). Update for 2027.
+holidays:
+  - 2026-11-09              # Diwali Balipratipada
+  - 2026-11-24              # Guru Nanak Jayanti
+  - 2026-12-25              # Christmas
+
+# Instrument keys: Upstox "NSE_EQ|<ISIN>". Kotak tokens are NSE exchange tokens;
+# confirm both once with: find-key SYMBOL  /  kotak-find SYMBOL
+instruments:
+  - symbol: RELIANCE
+    instrument_key: "NSE_EQ|INE002A01018"
+    backup: {kotak_token: "2885", kotak_segment: nse_cm}
+    strategy: {name: orb, range_minutes: 15, reward_risk: 2}
+  - symbol: HDFCBANK
+    instrument_key: "NSE_EQ|INE040A01034"
+    backup: {kotak_token: "1333", kotak_segment: nse_cm}
+    strategy: {name: orb, range_minutes: 15, reward_risk: 2}
+  - symbol: ICICIBANK
+    instrument_key: "NSE_EQ|INE090A01021"
+    backup: {kotak_token: "4963", kotak_segment: nse_cm}
+    strategy: {name: orb, range_minutes: 15, reward_risk: 2}
+  - symbol: INFY
+    instrument_key: "NSE_EQ|INE009A01021"
+    backup: {kotak_token: "1594", kotak_segment: nse_cm}
+    strategy: {name: orb, range_minutes: 15, reward_risk: 2}
+  - symbol: SBIN
+    instrument_key: "NSE_EQ|INE062A01020"
+    backup: {kotak_token: "3045", kotak_segment: nse_cm}
+    strategy: {name: orb, range_minutes: 15, reward_risk: 2}

@@ -16,6 +16,7 @@
   kotak-test / kotak-find   check Kotak Neo login / find an instrument token
   upstox-login              daily Upstox browser login (prints/stores today's token)
   report                    multi-day paper-trading report and verdict
+  preflight -c CONFIG       pre-market checklist (config, keys, calendar, data access)
   alert-test                send a test Telegram alert
   doctor                    check which keys/tokens are set
 """
@@ -160,6 +161,9 @@ def main(argv=None):
     rp.add_argument("--to", default=None)
     rp.add_argument("--out", default=None, help="write the report as Markdown (default runs/report.md)")
     rp.add_argument("--telegram", action="store_true", help="also send a short summary to Telegram")
+    pf = sub.add_parser("preflight")
+    pf.add_argument("-c", "--config", default="config/my.yaml")
+    pf.add_argument("--offline", action="store_true", help="skip the network checks")
     sub.add_parser("alert-test")
     sub.add_parser("doctor")
     args = p.parse_args(argv)
@@ -302,6 +306,9 @@ def main(argv=None):
         out = Path(args.out or Path(args.runs) / "report.md")
         out.write_text(text)
         print(f"Saved to {out}")
+    elif args.cmd == "preflight":
+        from .preflight import print_checks, run_checks
+        return print_checks(run_checks(load_config(args.config), online=not args.offline))
     elif args.cmd == "alert-test":
         from .alerts import TelegramNotifier
         n = TelegramNotifier()
