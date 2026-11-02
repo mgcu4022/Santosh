@@ -137,6 +137,32 @@ everything and stop trading.
 3. `export TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=...`, then `python -m tradebot alert-test`.
 4. Set `alerts: {telegram: true}` in your config. You'll get entries, exits, AI vetoes and kill-switch alerts.
 
+## Option trading terminal (paper)
+
+A browser screen for manual index-option trading, like a broker's option terminal, but every order is simulated.
+
+```bash
+python -m tradebot terminal --demo     # try it now: simulated prices, no login
+python -m tradebot terminal --login    # live NIFTY/BANKNIFTY/FINNIFTY/SENSEX chain from Upstox
+```
+Opens `http://127.0.0.1:8050` (only reachable from your own PC). Settings: `config/terminal.yaml`.
+
+![Option terminal](docs/terminal.png)
+
+- **Top bar:** index and expiry, spot, change, high/low, synthetic future, ATM straddle, MTM (booked + open, margin used).
+- **Option chain:** OI, IV and LTP for calls and puts, **B / S** buttons per strike, ATM row highlighted, a Lots box.
+- **Positions:** quantity, average, LTP, stop-loss, P&L; **+lots**, exit **¼ / ½ / all**, and **Move to** another strike.
+- **Rules:** MTM stop-loss and target exit everything and stop new trades for the day; **EXIT ALL** button.
+
+Safety, the same as the strategy bot:
+- Every new position and every add goes through the **risk agent**: 1% risk per position counting lots already held,
+  margin (option selling uses about 12% of the index value per unit), entry window, trade and order-rate limits.
+- Each position gets an automatic **premium stop-loss** (buys: −30%, sells: premium doubles). Intraday square-off at 15:15.
+- With ₹5 lakh, expect about **1 lot** of NIFTY option selling (≈₹1.8 lakh margin per lot). Large short-option positions
+  need large capital and can lose fast on sharp moves.
+
+Trades are saved to `runs/terminal_<date>/`; review them with `python -m tradebot report --prefix terminal`.
+
 ## Official NSE data and news (free)
 
 | Command | What it gets |
@@ -218,7 +244,8 @@ tradebot/
   brokers/      broker interface, paper broker
   data/         Upstox, Kotak Neo (backup), NSE official, Yahoo, Google Finance, CSV, synthetic
   risk.py  costs.py  indicators.py  backtest.py  metrics.py  paper_live.py  cli.py
-  scanner.py  deals.py  alerts.py  plan.py  news.py  context.py  report.py  upstox_auth.py
+  scanner.py  deals.py  alerts.py  plan.py  news.py  context.py  report.py  upstox_auth.py  preflight.py
+  options/      option terminal: chain data, paper engine, local web server, terminal.html
 scripts/          run_paper.bat (Windows) / run_paper.sh (cron) for the daily auto-start
 .claude/skills/   the six /trader-* skills
 config/example.yaml

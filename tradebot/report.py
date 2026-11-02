@@ -30,9 +30,10 @@ class RunData:
     folders: int
 
 
-def load_runs(runs_dir: str = "runs", start: str | None = None, end: str | None = None) -> RunData:
+def load_runs(runs_dir: str = "runs", start: str | None = None, end: str | None = None,
+              prefix: str = "paper") -> RunData:
     trades, journals, days, capital, folders = [], [], set(), None, 0
-    for d in sorted(Path(runs_dir).glob("paper_*")):
+    for d in sorted(Path(runs_dir).glob(f"{prefix}_*")):
         if not d.is_dir():
             continue
         day = d.name.split("_")[1][:8]

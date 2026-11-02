@@ -87,7 +87,10 @@ class RiskManager:
 
     # --- main check ---------------------------------------------------------
     def check_entry(self, sig: Signal, equity: float, open_positions: int,
-                    used_margin: float, live_clock: bool = False) -> Decision:
+                    used_margin: float, live_clock: bool = False,
+                    margin_per_unit: float | None = None) -> Decision:
+        """margin_per_unit overrides the notional x margin-fraction estimate (e.g. option selling,
+        where margin depends on the index level, not the premium)."""
         inst = sig.instrument
         if sig.action is not Action.ENTER:
             return Decision(True, reason="exit")
@@ -116,17 +119,17 @@ class RiskManager:
 
         risk_budget = equity * self.cfg.risk_per_trade_pct / 100
         qty_by_risk = risk_budget / per_unit_risk
-        mfrac = self.margin_fraction(inst, sig.side)
+        unit_margin = margin_per_unit if margin_per_unit else sig.price * self.margin_fraction(inst, sig.side)
         max_margin = equity * self.cfg.max_position_pct / 100
         free_margin = max(equity - used_margin, 0)
-        qty_by_margin = min(max_margin, free_margin) / (sig.price * mfrac)
+        qty_by_margin = min(max_margin, free_margin) / unit_margin
         qty = inst.round_qty(min(qty_by_risk, qty_by_margin))
         if qty <= 0:
             return Decision(False, reason=f"Size below 1 lot (lot={inst.lot_size}); risk or margin too small")
 
         if live_clock and not self._rate_ok():
             return Decision(False, reason="Order rate limit")
-        return Decision(True, qty=qty, reason=f"risk Rs{qty * per_unit_risk:,.0f}, margin Rs{qty * sig.price * mfrac:,.0f}")
+        return Decision(True, qty=qty, reason=f"risk Rs{qty * per_unit_risk:,.0f}, margin Rs{qty * unit_margin:,.0f}")
 
     def record_entry(self) -> None:
         self.trades_today += 1

@@ -17,6 +17,7 @@
   upstox-login              daily Upstox browser login (prints/stores today's token)
   report                    multi-day paper-trading report and verdict
   preflight -c CONFIG       pre-market checklist (config, keys, calendar, data access)
+  terminal [--demo]         option-trading screen in the browser (paper orders)
   alert-test                send a test Telegram alert
   doctor                    check which keys/tokens are set
 """
@@ -161,6 +162,13 @@ def main(argv=None):
     rp.add_argument("--to", default=None)
     rp.add_argument("--out", default=None, help="write the report as Markdown (default runs/report.md)")
     rp.add_argument("--telegram", action="store_true", help="also send a short summary to Telegram")
+    rp.add_argument("--prefix", default="paper", help="paper (strategy bot) or terminal (manual option trades)")
+    tm = sub.add_parser("terminal")
+    tm.add_argument("-c", "--config", default="config/terminal.yaml")
+    tm.add_argument("--demo", action="store_true", help="simulated prices on a simulated clock (no login)")
+    tm.add_argument("--login", action="store_true", help="open the daily Upstox login first")
+    tm.add_argument("--port", type=int, default=8050)
+    tm.add_argument("--no-browser", action="store_true")
     pf = sub.add_parser("preflight")
     pf.add_argument("-c", "--config", default="config/my.yaml")
     pf.add_argument("--offline", action="store_true", help="skip the network checks")
@@ -290,7 +298,7 @@ def main(argv=None):
             print("To use it in this terminal:\n  export UPSTOX_ACCESS_TOKEN=" + token)
     elif args.cmd == "report":
         from .report import compute, load_runs, render
-        rd = load_runs(args.runs, args.from_, args.to)
+        rd = load_runs(args.runs, args.from_, args.to, prefix=args.prefix)
         if not rd.days:
             print(f"No paper runs found in {args.runs}/ yet.")
             return 0
@@ -303,9 +311,11 @@ def main(argv=None):
             n = TelegramNotifier()
             n.send(short_summary(res))
             n.close()
-        out = Path(args.out or Path(args.runs) / "report.md")
+        out = Path(args.out or Path(args.runs) / f"report_{args.prefix}.md")
         out.write_text(text)
         print(f"Saved to {out}")
+    elif args.cmd == "terminal":
+        _terminal(args)
     elif args.cmd == "preflight":
         from .preflight import print_checks, run_checks
         return print_checks(run_checks(load_config(args.config), online=not args.offline))
@@ -320,6 +330,38 @@ def main(argv=None):
         for k, ok in env_check().items():
             print(f"  {k:<22} {'set' if ok else 'not set'}")
     return 0
+
+
+def _terminal(args):
+    import time as _t
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    from .options.chain import SimOptions, UpstoxOptions
+    from .options.engine import OptionTerminal, TerminalConfig
+    from .options.server import serve
+    from .risk import RiskConfig
+    cfg = load_config(args.config)
+    tcfg = TerminalConfig.from_dict({"capital": cfg.get("capital", 500_000), **cfg.get("terminal", {})})
+    risk_cfg = RiskConfig.from_dict({"capital": tcfg.capital, **cfg.get("risk", {})})
+    ist = ZoneInfo("Asia/Kolkata")
+    if args.demo:
+        start_real = _t.monotonic()
+        start_sim = datetime.now(ist).replace(hour=10, minute=0, second=0, microsecond=0)
+
+        def clock():   # simulated market clock: starts 10:00, runs 5x real time
+            return start_sim + timedelta(seconds=(_t.monotonic() - start_real) * 5)
+        provider = SimOptions(clock=clock)
+        provider.mode = "demo"
+    else:
+        from .data.upstox import UpstoxData
+        token = None
+        if args.login:
+            from .upstox_auth import interactive_login
+            token = interactive_login()
+        provider = UpstoxOptions(UpstoxData(access_token=token))
+        provider.mode = "live"
+        clock = None
+    serve(OptionTerminal(provider, tcfg, risk_cfg, clock=clock), port=args.port, open_browser=not args.no_browser)
 
 
 def _scan(args):

@@ -72,6 +72,13 @@ class PaperBroker(Broker):
         self._check_exits(inst, ts, o, h, l)
         self.last_price[sym] = c
 
+    def fill_now(self, order: Order, price: float, ts: datetime, reason: str = "") -> Order:
+        """Fill immediately at a live price plus slippage (manual terminal orders)."""
+        px = order.instrument.round_price(price * (1 + self.slippage * order.side.sign))
+        self.orders.append(order)
+        self._fill(order, px, ts, reason or order.tag)
+        return order
+
     def close_now(self, inst: Instrument, price: float, ts: datetime, reason: str) -> None:
         pos = self.get_position(inst.symbol)
         if not pos:

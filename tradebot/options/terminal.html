@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option Terminal</title>
+<style>
+  :root {
+    --bg: #0f1218; --panel: #161b24; --panel2: #1c2230; --line: #2a3242; --text: #e6e9ef; --muted: #8b94a7;
+    --green: #22c55e; --green-bg: #12301f; --red: #ef4444; --red-bg: #3a1618; --blue: #3b82f6;
+    --atm: #233456; --itm: #1a2130; --amber: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.35 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  .pos { color: var(--green); } .neg { color: var(--red); } .muted { color: var(--muted); }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel2); color: var(--text);
+           border-radius: 5px; padding: 3px 8px; }
+  button:hover { border-color: var(--muted); }
+  select, input { font: inherit; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+                  border-radius: 5px; padding: 3px 6px; }
+  input[type=number] { width: 90px; }
+
+  header { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 10px 14px;
+           background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  .stat { display: flex; flex-direction: column; }
+  .stat small { color: var(--muted); font-size: 11px; }
+  .stat b { font-size: 15px; }
+  .spot b { font-size: 19px; }
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 99px; letter-spacing: .03em; }
+  .b-paper { background: #2b2410; color: var(--amber); } .b-demo { background: #1d2a44; color: #93c5fd; }
+  .mtm { margin-left: auto; text-align: right; }
+  .mtm b { font-size: 22px; }
+
+  .rules { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 14px; background: var(--panel2);
+           border-bottom: 1px solid var(--line); }
+  .exitall { background: var(--red); border-color: var(--red); color: #fff; font-weight: 700; margin-left: auto; }
+  .halt { background: var(--red-bg); color: #fecaca; padding: 8px 14px; font-weight: 600; display: none; }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 12px; padding: 12px 14px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .card h3 { margin: 0; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid var(--line); display: flex;
+             gap: 10px; align-items: center; flex-wrap: wrap; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-align: right; padding: 6px 8px;
+       border-bottom: 1px solid var(--line); white-space: nowrap; background: var(--panel2); }
+  td { padding: 4px 8px; text-align: right; border-bottom: 1px solid #1f2633; white-space: nowrap; }
+  th.c, td.c { text-align: center; }
+  th.l, td.l { text-align: left; }
+  .strike { font-weight: 700; background: var(--panel2); text-align: center; }
+  tr.atm td { background: var(--atm); }
+  td.itm { background: var(--itm); }
+  .bs { padding: 1px 7px; font-weight: 700; font-size: 11px; }
+  .b { background: var(--green-bg); color: var(--green); border-color: #1d5a35; }
+  .s { background: var(--red-bg); color: var(--red); border-color: #6b2124; }
+  .ce { color: #93c5fd; font-weight: 600; } .pe { color: #fca5a5; font-weight: 600; }
+  .actions { display: flex; gap: 4px; justify-content: flex-end; align-items: center; }
+  .actions button { padding: 1px 6px; font-size: 12px; }
+  .log { max-height: 220px; overflow-y: auto; }
+  .msg { padding: 4px 12px; border-bottom: 1px solid #1f2633; }
+  .msg.error { color: #fca5a5; } .msg.warn { color: #fcd34d; } .msg.ok { color: #86efac; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 8px;
+           background: #111827; border: 1px solid var(--line); display: none; z-index: 9; max-width: 90vw; }
+  #toast.err { border-color: var(--red); color: #fecaca; } #toast.ok { border-color: var(--green); color: #bbf7d0; }
+  .empty { padding: 16px; text-align: center; color: var(--muted); }
+  @media (max-width: 640px) {
+    .w { display: none; }
+    td, th { padding: 4px 5px; }
+    .bs { padding: 1px 5px; }
+    .actions button { padding: 1px 4px; }
+    .actions { flex-wrap: wrap; row-gap: 4px; }
+    #pos td { white-space: normal; }
+    #pos select { max-width: 74px; }
+    .postable th:nth-child(9) { display: none; }
+    .postable td:nth-child(9) { display: none; }
+    .mmove { display: flex !important; }
+  }
+  .mmove { display: none; }
+  .foot { padding: 6px 14px 16px; color: var(--muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+<header>
+  <select id="und" title="Index"></select>
+  <select id="exp" title="Expiry"></select>
+  <div class="stat spot"><small>Spot</small><b class="num" id="spot">–</b></div>
+  <div class="stat"><small>Change</small><b class="num" id="chg">–</b></div>
+  <div class="stat"><small>High / Low</small><b class="num" id="hl">–</b></div>
+  <div class="stat"><small>Syn. Future</small><b class="num" id="syn">–</b></div>
+  <div class="stat"><small>ATM straddle</small><b class="num" id="strad">–</b></div>
+  <span class="badge b-paper">PAPER</span><span class="badge b-demo" id="mode" style="display:none">DEMO DATA</span>
+  <span class="muted num" id="clock"></span>
+  <div class="stat mtm"><small>MTM today</small><b class="num" id="mtm">0</b>
+    <small class="num" id="mtmsub"></small></div>
+</header>
+
+<div class="rules">
+  <label>MTM stop-loss ₹ <input type="number" id="r_sl" min="0" step="500"></label>
+  <label>MTM target ₹ <input type="number" id="r_tg" min="0" step="500"></label>
+  <button id="saverules">Save rules</button>
+  <span class="muted" id="rulesinfo"></span>
+  <label class="muted"><input type="checkbox" id="confirm"> Confirm each order</label>
+  <button class="exitall" id="exitall">EXIT ALL</button>
+</div>
+<div class="halt" id="halt"></div>
+
+<main>
+  <section class="card">
+    <h3>Option chain
+      <label class="muted">Lots <input type="number" id="lots" value="1" min="1" style="width:60px"></label>
+      <span class="muted num" id="qtyinfo"></span>
+    </h3>
+    <div class="scroll"><table>
+      <thead><tr>
+        <th class="w">OI</th><th class="w">IV</th><th>Call LTP</th><th class="c">Call</th>
+        <th class="c">Strike</th>
+        <th class="c">Put</th><th>Put LTP</th><th class="w">IV</th><th class="w">OI</th>
+      </tr></thead>
+      <tbody id="chain"></tbody>
+    </table></div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;min-width:0">
+    <div class="card">
+      <h3>Positions <span class="muted num" id="posinfo"></span></h3>
+      <div class="scroll"><table class="postable">
+        <thead><tr><th class="l">Strike</th><th class="c">Type</th><th>Qty</th><th class="w">Avg</th><th>LTP</th><th class="w">SL</th><th>P&amp;L</th>
+          <th class="c">Add / Exit</th><th class="c">Move to</th></tr></thead>
+        <tbody id="pos"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>Closed trades</h3>
+      <div class="scroll log"><table>
+        <thead><tr><th class="l">Time</th><th class="l">Symbol</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Net P&amp;L</th><th class="l">Why</th></tr></thead>
+        <tbody id="closed"></tbody>
+      </table></div>
+    </div>
+    <div class="card"><h3>Activity</h3><div class="log" id="msgs"></div></div>
+  </section>
+</main>
+<div class="foot">Paper trading: no real orders are sent. Every new position passes the risk agent (lot limits, margin,
+  entry window) and gets an automatic premium stop-loss. Not investment advice.</div>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 2) => x == null ? "–" : Number(x).toLocaleString("en-IN", {minimumFractionDigits: d, maximumFractionDigits: d});
+const cls = x => x > 0 ? "pos" : x < 0 ? "neg" : "";
+const kfmt = x => x >= 1e5 ? (x / 1e5).toFixed(1) + "L" : x >= 1e3 ? (x / 1e3).toFixed(0) + "K" : x;
+let S = null, rulesTouched = false;
+const moveSel = {};
+
+function toast(text, ok) {
+  const t = $("toast"); t.textContent = text; t.className = ok ? "ok" : "err"; t.style.display = "block";
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = "none", 3500);
+}
+async function post(path, body) {
+  try {
+    const r = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+    const j = await r.json();
+    if (!j.ok) toast(j.error || "Failed", false);
+    else if (j.price != null) toast(`Filled @ ${fmt(j.price)}`, true);
+    refresh();
+    return j;
+  } catch (e) { toast("Terminal not reachable: " + e, false); }
+}
+function order(side, opt, strike) {
+  const lots = parseInt($("lots").value) || 1;
+  if ($("confirm").checked && !confirm(`${side} ${lots} lot(s) ${strike} ${opt}?`)) return;
+  post("/api/order", {side, opt, strike, lots});
+}
+
+function renderHeader(s) {
+  $("spot").textContent = fmt(s.spot);
+  if (s.prev_close) {
+    const c = s.spot - s.prev_close;
+    $("chg").innerHTML = `<span class="${cls(c)}">${c >= 0 ? "+" : ""}${fmt(c)} (${(c / s.prev_close * 100).toFixed(2)}%)</span>`;
+  }
+  $("hl").textContent = s.high ? `${fmt(s.high, 0)} / ${fmt(s.low, 0)}` : "–";
+  $("syn").textContent = fmt(s.syn_future);
+  $("strad").textContent = fmt(s.straddle);
+  $("clock").textContent = s.time;
+  $("mode").style.display = s.mode === "demo" ? "" : "none";
+  $("mtm").textContent = (s.mtm >= 0 ? "+" : "") + fmt(s.mtm);
+  $("mtm").className = "num " + cls(s.mtm);
+  $("mtmsub").textContent = `Booked ${fmt(s.realized, 0)} · Open ${fmt(s.unrealized, 0)} · Margin ${fmt(s.margin_used, 0)}`;
+  $("qtyinfo").textContent = `= ${(parseInt($("lots").value) || 1) * s.lot_size} qty (lot ${s.lot_size})`;
+  if (!rulesTouched) { $("r_sl").value = s.rules.mtm_stop_loss; $("r_tg").value = s.rules.mtm_target; }
+  $("rulesinfo").textContent = `Per-position SL: buys −${s.rules.buy_sl_pct}%, sells +${s.rules.sell_sl_pct}% · Trades ${s.trades_today}/${s.max_trades}`;
+  $("halt").style.display = s.halted ? "block" : "none";
+  $("halt").textContent = s.halted ? `Trading stopped for today: ${s.halt_reason}` : "";
+  fillSelect($("und"), s.underlyings, s.underlying);
+  fillSelect($("exp"), s.expiries, s.expiry, e => new Date(e + "T00:00").toLocaleDateString("en-IN", {day: "numeric", month: "short"}));
+}
+function fillSelect(el, items, val, label) {
+  const key = items.join(",");
+  if (el.dataset.k !== key) { el.innerHTML = items.map(i => `<option value="${i}">${label ? label(i) : i}</option>`).join(""); el.dataset.k = key; }
+  if (document.activeElement !== el) el.value = val;
+}
+
+function renderChain(s) {
+  $("chain").innerHTML = s.chain.map(r => {
+    const k = r.strike, citm = k < s.spot ? "itm" : "", pitm = k > s.spot ? "itm" : "";
+    return `<tr class="${r.atm ? "atm" : ""}">
+      <td class="num muted w ${citm}">${kfmt(r.ce.oi)}</td><td class="num muted w ${citm}">${r.ce.iv || "–"}</td>
+      <td class="num ${citm}">${fmt(r.ce.ltp)}</td>
+      <td class="c ${citm}"><button class="bs b" onclick="order('BUY','CE',${k})">B</button>
+        <button class="bs s" onclick="order('SELL','CE',${k})">S</button></td>
+      <td class="strike num">${k}</td>
+      <td class="c ${pitm}"><button class="bs b" onclick="order('BUY','PE',${k})">B</button>
+        <button class="bs s" onclick="order('SELL','PE',${k})">S</button></td>
+      <td class="num ${pitm}">${fmt(r.pe.ltp)}</td><td class="num muted w ${pitm}">${r.pe.iv || "–"}</td>
+      <td class="num muted w ${pitm}">${kfmt(r.pe.oi)}</td></tr>`;
+  }).join("") || `<tr><td colspan="9" class="empty">Waiting for market data…</td></tr>`;
+}
+
+function renderPositions(s) {
+  const tb = $("pos");
+  if (tb.contains(document.activeElement) && document.activeElement.tagName === "SELECT") return; // don't disturb a choice
+  const strikes = s.chain.map(r => r.strike);
+  let total = 0;
+  tb.innerHTML = s.positions.map(p => {
+    total += p.pnl;
+    const sym = JSON.stringify(p.symbol).replace(/"/g, "&quot;");
+    const opts = strikes.map(k => `<option value="${k}" ${String(moveSel[p.symbol] ?? p.strike) == String(k) ? "selected" : ""}>${k}</option>`).join("");
+    const move = p.movable ? `<select onchange="moveSel[${sym}]=this.value">${opts}</select>
+        <button onclick="moveTo(${sym})">Go</button>` : `<span class="muted">${p.expiry}</span>`;
+    return `<tr>
+      <td class="l num">${p.strike}</td><td class="c ${p.opt.toLowerCase()}">${p.opt}</td>
+      <td class="num ${p.qty < 0 ? "neg" : "pos"}">${p.qty}</td><td class="num w">${fmt(p.avg)}</td><td class="num">${fmt(p.ltp)}</td>
+      <td class="num muted w">${fmt(p.stop)}</td><td class="num ${cls(p.pnl)}">${fmt(p.pnl)}</td>
+      <td><div class="actions">
+        ${p.movable ? `<button title="Add lots (uses the Lots box)" onclick="addLots(${sym})">+${parseInt($("lots").value) || 1}L</button>` : ""}
+        <button onclick="post('/api/exit',{symbol:${sym},fraction:0.25})">¼</button>
+        <button onclick="post('/api/exit',{symbol:${sym},fraction:0.5})">½</button>
+        <button onclick="post('/api/exit',{symbol:${sym},fraction:1})">Exit</button></div>
+        <div class="actions mmove" style="margin-top:4px">${move}</div></td>
+      <td><div class="actions">${move}</div></td></tr>`;
+  }).join("") || `<tr><td colspan="9" class="empty">No open positions. Use B / S on the chain.</td></tr>`;
+  $("posinfo").innerHTML = s.positions.length ? `${s.positions.length} open · <span class="${cls(total)}">${fmt(total)}</span>` : "";
+}
+function addLots(sym) { post("/api/add", {symbol: sym, lots: parseInt($("lots").value) || 1}); }
+function moveTo(sym) {
+  const k = moveSel[sym]; if (!k) return toast("Pick a strike first", false);
+  if ($("confirm").checked && !confirm(`Move ${sym} to ${k}?`)) return;
+  post("/api/move", {symbol: sym, strike: parseFloat(k)}); delete moveSel[sym];
+}
+
+function renderLogs(s) {
+  $("closed").innerHTML = s.closed.map(t => `<tr><td class="l num">${t.time}</td><td class="l">${t.symbol}</td><td class="num">${t.qty}</td>
+    <td class="num">${fmt(t.entry)}</td><td class="num">${fmt(t.exit)}</td><td class="num ${cls(t.net)}">${fmt(t.net)}</td>
+    <td class="l muted">${t.why}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">None yet</td></tr>`;
+  $("msgs").innerHTML = s.messages.map(m => `<div class="msg ${m.level}"><span class="muted num">${m.time}</span> ${m.text}</div>`).join("")
+    || `<div class="empty">Activity will show here</div>`;
+}
+
+async function refresh() {
+  try {
+    const s = await (await fetch("/api/state")).json();
+    S = s; renderHeader(s); renderChain(s); renderPositions(s); renderLogs(s);
+  } catch (e) { $("clock").textContent = "disconnected"; }
+}
+
+$("und").onchange = e => post("/api/view", {underlying: e.target.value});
+$("exp").onchange = e => post("/api/view", {expiry: e.target.value});
+$("r_sl").oninput = $("r_tg").oninput = () => rulesTouched = true;
+$("saverules").onclick = async () => {
+  await post("/api/rules", {mtm_stop_loss: parseFloat($("r_sl").value) || 0, mtm_target: parseFloat($("r_tg").value) || 0});
+  rulesTouched = false; toast("Rules saved", true);
+};
+$("exitall").onclick = () => { if (confirm("Exit ALL positions now?")) post("/api/exit_all"); };
+$("lots").oninput = () => S && renderHeader(S);
+refresh(); setInterval(refresh, 1000);
+</script>
+</body>
+</html>

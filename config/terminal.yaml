@@ -1,0 +1,25 @@
+# Option terminal (paper). Start:  python -m tradebot terminal            (live Upstox data, daily login)
+#                                   python -m tradebot terminal --demo     (simulated prices, no login)
+capital: 500000
+
+terminal:
+  underlying: NIFTY          # NIFTY, BANKNIFTY, FINNIFTY, SENSEX (switchable on screen)
+  strikes_each_side: 10
+  slippage_bps: 10           # options have wider spreads: be pessimistic
+  buy_sl_pct: 30             # each bought option exits if its premium falls 30%
+  sell_sl_pct: 100           # each sold option exits if its premium doubles
+  sell_margin_pct: 12        # approx. margin for selling, % of index value per unit (check your broker)
+  mtm_stop_loss: 10000       # exit everything and stop for the day at -Rs 10,000 (0 = off)
+  mtm_target: 0              # exit everything at +Rs X (0 = off)
+  product: INTRADAY          # INTRADAY = auto square-off at 15:15
+
+risk:                        # the same risk agent as the strategy bot
+  risk_per_trade_pct: 1.0    # max loss per position at its stop: Rs 5,000
+  max_position_pct: 40       # max margin per position, % of capital
+  max_open_positions: 6
+  max_daily_loss_pct: 3.0
+  max_trades_per_day: 20
+  no_entry_before: "09:20"
+  no_entry_after: "15:00"
+  square_off_time: "15:15"
+  allow_option_selling: true # paper only; selling has large losses on sharp moves
