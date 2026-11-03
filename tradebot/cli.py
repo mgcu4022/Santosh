@@ -374,10 +374,8 @@ def _terminal(args):
         provider.mode = "demo"
     else:
         from .data.upstox import UpstoxData
-        token = None
-        if args.login:
-            from .upstox_auth import interactive_login
-            token = interactive_login()
+        from .upstox_auth import get_token
+        token = get_token(args.login)
         provider = UpstoxOptions(UpstoxData(access_token=token))
         provider.mode = "live"
         clock = None

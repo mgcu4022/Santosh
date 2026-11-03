@@ -164,3 +164,12 @@ def test_report_date_filter(tmp_path):
     write_runs(tmp_path, [[100]] * 10)
     r = load_runs(str(tmp_path), start="2026-01-12")
     assert r.days[0] == "2026-01-12" and len(r.days) == 5
+
+
+def test_saved_analytics_token_skips_login(monkeypatch):
+    monkeypatch.setenv("UPSTOX_ACCESS_TOKEN", "analytics-token")
+    monkeypatch.setattr(ua, "interactive_login", lambda *a, **k: pytest.fail("must not open a login"))
+    assert ua.get_token(login=True) == "analytics-token"
+    monkeypatch.delenv("UPSTOX_ACCESS_TOKEN")
+    monkeypatch.setattr(ua, "token_from_keyring", lambda: None)
+    assert ua.get_token(login=False) is None

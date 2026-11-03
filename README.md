@@ -86,7 +86,9 @@ That's the expected result: on random data no strategy has an edge.
 **One-time setup (about 30 minutes, on your PC):**
 1. Install Python 3.11+, then in this folder: `python -m venv .venv`, activate it, `pip install -r requirements.txt`.
 2. Upstox developer console → create an app → Redirect URL `http://127.0.0.1:5055/callback`.
-3. Copy `.env.example` to `.env` and fill in `UPSTOX_API_KEY`, `UPSTOX_API_SECRET` (plus Telegram/Kotak/Anthropic if used).
+3. Copy `.env.example` to `.env` and paste your Upstox **Analytics Token** after `UPSTOX_ACCESS_TOKEN=`
+   (developer portal → My Apps → Analytics → Generate Token: valid 1 year, read-only, no daily login).
+   Plus Telegram/Kotak/Anthropic if used.
    `.env` is git-ignored; never share it.
 4. `config/my.yaml` is a ready starter (ORB on RELIANCE, HDFCBANK, ICICIBANK, INFY, SBIN; ₹5 lakh paper capital).
    Check everything with `python -m tradebot preflight` (it must say READY).

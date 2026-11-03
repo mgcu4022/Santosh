@@ -160,10 +160,9 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
     if tf["unit"] != "minutes":
         raise ValueError("Paper trading supports minute candles only")
 
-    token = None
+    from .upstox_auth import get_token
+    token = get_token(login, login_timeout_min, notify=notifier.send if notifier else None)
     if login:
-        from .upstox_auth import interactive_login
-        token = interactive_login(login_timeout_min, notify=notifier.send if notifier else None)
         if token is None:
             msg = "[PAPER] No Upstox login; continuing on backup data (Kotak Neo) where configured."
             log.warning(msg)

@@ -72,10 +72,13 @@ pip install -r requirements.txt && python -m pytest -q
 ```
 
 ### Connect the user's own Upstox account (for live prices)
-1. https://account.upstox.com/developer/apps → **New App**.
-   Redirect URL must be exactly `http://127.0.0.1:5055/callback`.
-2. `Copy-Item .env.example .env` then `notepad .env`. The **user types** `UPSTOX_API_KEY=` and
-   `UPSTOX_API_SECRET=` themselves and saves. You don't read the file.
+Recommended: **Analytics Token**. https://account.upstox.com/developer/apps → My Apps → **Analytics** tab →
+**Generate Token**. Valid 1 year, read-only (cannot place orders), covers market data, no daily login.
+1. `Copy-Item .env.example .env` then `notepad .env`. The **user pastes** it after `UPSTOX_ACCESS_TOKEN=`
+   themselves and saves. You don't read the file.
+2. Alternative: an app (**+ App**, redirect exactly `http://127.0.0.1:5055/callback`) with
+   `UPSTOX_API_KEY`/`UPSTOX_API_SECRET`; that path needs the browser login every day (`--login`).
+   With a saved token, `--login` is skipped automatically.
 3. `python -m tradebot preflight -c config/my.yaml` must end with **READY**.
    "Upstox data ⚠️ normal before today's login" is fine.
 
@@ -88,7 +91,7 @@ Claude AI analyst (`ANTHROPIC_API_KEY`, `analyst.enabled: true`, costs money per
 | Time | Action |
 |---|---|
 | Before 09:00 | `python -m tradebot preflight` → READY |
-| 09:00 | `python -m tradebot paper -c config/my.yaml --login -v` → browser opens Upstox login → user logs in (PIN/OTP). The Upstox token expires every night, so this login is needed daily. |
+| 09:00 | `python -m tradebot paper -c config/my.yaml --login -v`. With the Analytics Token in `.env` it starts directly; with app keys the browser opens the daily Upstox login (PIN/OTP). |
 | 09:15–15:30 | Leave the PC on and awake. New entries 09:30–14:30 (my.yaml); all intraday positions close at 15:15. |
 | Kill switch | Create a file named `STOP` in today's run folder: `New-Item runs\paper_YYYYMMDD\STOP` (Windows) or `touch ...` |
 | After 15:30 | `python -m tradebot report` (all days combined, strict verdict) |

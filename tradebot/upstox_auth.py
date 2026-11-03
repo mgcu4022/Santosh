@@ -1,4 +1,10 @@
-"""Daily Upstox login (OAuth). Upstox tokens expire every night (~3:30 AM IST).
+"""Upstox access for market data.
+
+Recommended: an **Analytics Token** (Upstox developer portal -> My Apps -> Analytics ->
+Generate Token). It lasts one year, is read-only (it cannot place orders) and covers
+market data. Put it in .env as UPSTOX_ACCESS_TOKEN=... and no daily login is needed.
+
+Alternative: daily Upstox login (OAuth). Those tokens expire every night (~3:30 AM IST).
 
 Upstox requires you to log in yourself (PIN/OTP) once a day; that can't be
 automated. This helper makes it a 30-second step:
@@ -121,6 +127,22 @@ def interactive_login(timeout_min: float = 10, open_browser: bool = True, notify
     token = exchange_code(code, key, secret, redirect)
     log.info("Upstox login OK (%s)", check_token(token))
     return token
+
+
+def saved_token() -> str | None:
+    """A token that needs no login: UPSTOX_ACCESS_TOKEN (e.g. the 1-year Analytics Token) or the OS keyring."""
+    return os.environ.get("UPSTOX_ACCESS_TOKEN") or token_from_keyring()
+
+
+def get_token(login: bool, timeout_min: float = 10, notify=None) -> str | None:
+    """Use a saved token if there is one; otherwise do the browser login when asked."""
+    tok = saved_token()
+    if tok:
+        log.info("Using saved Upstox token (no login needed)")
+        return tok
+    if login:
+        return interactive_login(timeout_min, notify=notify)
+    return None
 
 
 def token_from_keyring() -> str | None:

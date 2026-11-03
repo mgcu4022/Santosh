@@ -53,8 +53,8 @@ def run_checks(cfg: dict, online: bool = True, now: datetime | None = None) -> l
     has_login = os.environ.get("UPSTOX_API_KEY") and os.environ.get("UPSTOX_API_SECRET")
     has_token = os.environ.get("UPSTOX_ACCESS_TOKEN")
     add(OK if (has_login or has_token) else FAIL, "Upstox credentials",
-        "API key/secret set (daily --login)" if has_login else ("access token set" if has_token else
-        "set UPSTOX_API_KEY and UPSTOX_API_SECRET in .env"))
+        "access token set (no daily login needed)" if has_token else ("API key/secret set (daily --login)"
+        if has_login else "put UPSTOX_ACCESS_TOKEN (Analytics Token) in .env"))
     if cfg.get("alerts", {}).get("telegram"):
         tg = os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID")
         add(OK if tg else FAIL, "Telegram", "set" if tg else "telegram: true but TELEGRAM_* not set")
