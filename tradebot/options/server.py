@@ -44,6 +44,7 @@ def make_handler(term: OptionTerminal):
                 body = json.loads(self.rfile.read(n) or b"{}")
                 routes = {
                     "/api/order": lambda b: term.place(b["side"], b["opt"], b["strike"], int(b["lots"])),
+                    "/api/preview": lambda b: term.preview(b["side"], b["opt"], b["strike"], int(b["lots"])),
                     "/api/exit": lambda b: term.exit_fraction(b["symbol"], float(b["fraction"])),
                     "/api/add": lambda b: term.add_lots(b["symbol"], int(b["lots"])),
                     "/api/move": lambda b: term.move(b["symbol"], float(b["strike"])),

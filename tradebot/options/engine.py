@@ -38,6 +38,7 @@ class TerminalConfig:
     mtm_stop_loss: float = 10_000     # exit all at -Rs (0 = off)
     mtm_target: float = 0             # exit all at +Rs (0 = off)
     product: str = "INTRADAY"
+    min_premium: float = 0.5          # no new trades in options priced below this (nothing to gain, no liquidity)
     out_dir: str = "runs"
 
     @classmethod
@@ -152,46 +153,111 @@ class OptionTerminal:
         self._note("error", f"{why}: all positions closed, no new trades today")
 
     # --- actions --------------------------------------------------------------------------
+    def _stop_for(self, side: Side, price: float, tick: float = 0.05) -> float:
+        """Premium stop-loss, always at least one tick away from the price."""
+        if side is Side.BUY:
+            return max(round(round(price * (1 - self.cfg.buy_sl_pct / 100) / tick) * tick, 2), 0.0)
+        return max(round(round(price * (1 + self.cfg.sell_sl_pct / 100) / tick) * tick, 2), round(price + tick, 2))
+
+    def _evaluate(self, side: str, opt: str, strike: float, lots: int, for_real: bool) -> dict:
+        """Everything about a prospective order, including the risk agent's decision."""
+        if not self.chain:
+            raise TerminalError("No market data yet")
+        side_e, strike, lots = Side(side.upper()), float(strike), int(lots)
+        if lots < 1:
+            raise TerminalError("Lots must be at least 1")
+        ltp = self.chain.ltp(strike, opt)
+        if not ltp:
+            raise TerminalError(f"No price for {strike:g} {opt}")
+        lot = self.chain.lot_size
+        inst = self._instrument(strike, opt, lot)
+        qty = lots * lot
+        existing = self.broker.get_position(inst.symbol)
+        ev = {"symbol": inst.symbol, "side": side_e.value, "opt": opt, "strike": strike, "lots": lots, "qty": qty,
+              "lot_size": lot, "ltp": ltp, "inst": inst, "existing": existing,
+              "est_price": inst.round_price(ltp * (1 + self.broker.slippage * side_e.sign))}
+        if existing and (existing.qty > 0) != (side_e is Side.BUY):
+            ev.update(closing=True, approved=True, close_qty=min(qty, abs(existing.qty)),
+                      reason=f"This closes {min(qty, abs(existing.qty)) // lot} lot(s) of your open position")
+            return ev
+        ev["closing"] = False
+        if ltp < self.cfg.min_premium:
+            ev.update(approved=False, max_lots=0,
+                      reason=f"Premium Rs{ltp:g} is below Rs{self.cfg.min_premium:g}: almost nothing to gain and hard to trade")
+            return ev
+        sl = self._stop_for(side_e, ltp, inst.tick_size)
+        sig = Signal(inst, Action.ENTER, side_e, ltp, self.clock(), "manual", stop_loss=sl)
+        n_open = len(self.broker.open_positions()) - (1 if existing else 0)
+        d = self.risk.check_entry(sig, self.broker.equity(), n_open, self.used_margin(), live_clock=for_real,
+                                  margin_per_unit=self._sell_margin_unit() if side_e is Side.SELL else None)
+        held = abs(existing.qty) if existing else 0          # adds count against the same risk budget
+        max_lots = max(d.qty - held, 0) // lot if d.approved else 0
+        ev.update(stop=sl, max_lots=max_lots)
+        if not d.approved:
+            ev.update(approved=False, reason=d.reason)
+        elif qty > d.qty - held:
+            ev.update(approved=False, reason=(
+                f"max {d.qty // lot} lot(s) in this position under your risk rules; you hold {held // lot}, "
+                f"so {max_lots} more allowed (asked {lots})") if held else
+                f"max {d.qty // lot} lot(s) under your risk rules (asked {lots})")
+        else:
+            ev.update(approved=True, reason="Passes the risk agent")
+        return ev
+
+    def preview(self, side: str, opt: str, strike: float, lots: int) -> dict:
+        """Plain-language order ticket: cost, margin, stop-loss, breakeven, and the risk decision."""
+        with self.lock:
+            ev = self._evaluate(side, opt, strike, lots, for_real=False)
+            p, q, k, und = ev["est_price"], ev["qty"], ev["strike"], self.underlying
+            out = {k2: v for k2, v in ev.items() if k2 not in ("inst", "existing")}
+            out["ok"] = True
+            if ev["closing"]:
+                out["text"] = [ev["reason"] + f", at about Rs{p:,.2f}."]
+                return out
+            if "stop" not in ev:          # blocked before sizing (e.g. premium too small)
+                out["text"] = []
+                return out
+            buy, call = ev["side"] == "BUY", ev["opt"] == "CE"
+            value = round(p * q, 2)
+            margin = value if buy else round(self._sell_margin_unit() * q, 0)
+            be = k + p if call else k - p
+            charges = self.broker.charges.order_charges(Segment.OPT, ev["inst"].product, Side(ev["side"]), p, q) +                 self.broker.charges.order_charges(Segment.OPT, ev["inst"].product, Side(ev["side"]).opposite(), ev.get("stop") or p, q)
+            loss_sl = round(abs(p - (ev.get("stop") or p)) * q + charges, 0)
+            dirn = "rises" if call else "falls"
+            if buy:
+                text = [f"You PAY Rs{value:,.0f} now ({q} qty x Rs{p:,.2f}).",
+                        f"You gain if {und} {dirn} enough: at expiry you need {und} {'above' if call else 'below'} {be:,.0f} "
+                        f"(breakeven). Before expiry, any rise in this option's price is profit.",
+                        f"Most you can lose is the Rs{value:,.0f} paid. The stop-loss (Rs{ev.get('stop', 0):,.2f}) exits earlier, "
+                        f"at about Rs{loss_sl:,.0f} loss including charges."]
+            else:
+                text = [f"You RECEIVE Rs{value:,.0f} now ({q} qty x Rs{p:,.2f}), and Rs{margin:,.0f} margin is blocked.",
+                        f"You keep it if {und} stays {'below' if call else 'above'} {k:,.0f} at expiry; you start losing beyond "
+                        f"{be:,.0f}. A sharp move against you can lose much more than you received.",
+                        f"The stop-loss (Rs{ev.get('stop', 0):,.2f}) exits at about Rs{loss_sl:,.0f} loss including charges."]
+            out.update(value=value, margin=margin, breakeven=round(be, 2), loss_at_stop=loss_sl,
+                       charges=round(charges, 0), text=text)
+            return out
+
     def place(self, side: str, opt: str, strike: float, lots: int) -> dict:
         with self.lock:
-            if not self.chain:
-                raise TerminalError("No market data yet")
-            side_e, strike = Side(side.upper()), float(strike)
-            ltp = self.chain.ltp(strike, opt)
-            if not ltp:
-                raise TerminalError(f"No price for {strike:g} {opt}")
-            lot = self.chain.lot_size
-            inst = self._instrument(strike, opt, lot)
-            qty_req = int(lots) * lot
-            existing = self.broker.get_position(inst.symbol)
-            if existing and (existing.qty > 0) != (side_e is Side.BUY):
-                return self._reduce(existing, min(qty_req, abs(existing.qty)), "manual exit")
-            sl = ltp * (1 - self.cfg.buy_sl_pct / 100) if side_e is Side.BUY else ltp * (1 + self.cfg.sell_sl_pct / 100)
-            sig = Signal(inst, Action.ENTER, side_e, ltp, self.clock(), "manual", stop_loss=sl)
-            n_open = len(self.broker.open_positions()) - (1 if existing else 0)
-            d = self.risk.check_entry(sig, self.broker.equity(), n_open, self.used_margin(), live_clock=True,
-                                      margin_per_unit=self._sell_margin_unit() if side_e is Side.SELL else None)
-            if not d.approved:
-                self._log("RISK_BLOCK", inst.symbol, side=side_e.value, lots=lots, why=d.reason)
-                raise TerminalError(f"Blocked by risk agent: {d.reason}")
-            held = abs(existing.qty) if existing else 0          # adds count against the same risk budget
-            if qty_req > d.qty - held:
-                room = max(d.qty - held, 0) // lot
-                why = (f"max {d.qty // lot} lot(s) in this position under your risk rules; "
-                       f"you hold {held // lot}, so {room} more allowed (asked {lots})") if held else \
-                      f"max {d.qty // lot} lot(s) under your risk rules (asked {lots})"
-                self._log("RISK_BLOCK", inst.symbol, side=side_e.value, lots=lots, why=why)
-                raise TerminalError(f"Blocked by risk agent: {why}")
-            self.meta[inst.symbol] = {"strike": strike, "opt": opt, "expiry": self.expiry, "underlying": self.underlying}
-            order = Order(inst, side_e, qty_req, self.clock(), inst.product, tag="manual", stop_loss=sl)
-            self.broker.fill_now(order, ltp, self.clock())
+            ev = self._evaluate(side, opt, strike, lots, for_real=True)
+            inst, side_e, qty_req = ev["inst"], Side(ev["side"]), ev["qty"]
+            if ev["closing"]:
+                return self._reduce(ev["existing"], ev["close_qty"], "manual exit")
+            if not ev["approved"]:
+                self._log("RISK_BLOCK", inst.symbol, side=side_e.value, lots=lots, why=ev["reason"])
+                raise TerminalError(f"Blocked by risk agent: {ev['reason']}")
+            self.meta[inst.symbol] = {"strike": ev["strike"], "opt": ev["opt"], "expiry": self.expiry,
+                                      "underlying": self.underlying}
+            order = Order(inst, side_e, qty_req, self.clock(), inst.product, tag="manual", stop_loss=ev["stop"])
+            self.broker.fill_now(order, ev["ltp"], self.clock())
             pos = self.broker.get_position(inst.symbol)
             if pos:   # keep the stop relative to the average price after adds
-                pos.stop_loss = inst.round_price(pos.avg_price * (1 - self.cfg.buy_sl_pct / 100) if pos.qty > 0
-                                                 else pos.avg_price * (1 + self.cfg.sell_sl_pct / 100))
+                pos.stop_loss = self._stop_for(pos.side, pos.avg_price, inst.tick_size)
             self.risk.record_entry()
             self._log("ENTRY", inst.symbol, side=side_e.value, qty=qty_req, price=order.fill_price, stop=pos.stop_loss)
-            self._note("ok", f"{side_e.value} {lots} lot(s) {inst.symbol} @ {order.fill_price} (SL {pos.stop_loss})")
+            self._note("ok", f"{side_e.value} {ev['lots']} lot(s) {inst.symbol} @ {order.fill_price} (SL {pos.stop_loss})")
             self.save()
             return {"ok": True, "price": order.fill_price, "qty": qty_req}
 
@@ -297,18 +363,29 @@ class OptionTerminal:
                 atm = ch.atm()
                 for k in ch.window(self.cfg.strikes_each_side):
                     r = ch.rows[k]
-                    rows.append({"strike": k, "atm": k == atm,
-                                 "ce": vars(r["CE"]) | {"key": ""}, "pe": vars(r["PE"]) | {"key": ""}})
+                    leg = lambda L: vars(L) | {"key": "", "chg_pct": L.chg_pct}
+                    rows.append({"strike": k, "atm": k == atm, "ce": leg(r["CE"]), "pe": leg(r["PE"])})
             positions = []
             for sym, m in self.meta.items():
                 p = self.broker.get_position(sym)
                 if not p:
                     continue
                 px = self._price(sym) or p.avg_price
+                call, long = m["opt"] == "CE", p.qty > 0
+                be = m["strike"] + p.avg_price if call else m["strike"] - p.avg_price
+                u = m["underlying"]
+                if long:
+                    desc = f"Bought {'call' if call else 'put'}: gains if {u} {'rises' if call else 'falls'}" \
+                           f" (expiry breakeven {be:,.0f})"
+                else:
+                    desc = f"Sold {'call' if call else 'put'}: gains if {u} stays {'below' if call else 'above'} " \
+                           f"{m['strike']:,.0f} (loses beyond {be:,.0f})"
                 positions.append({"symbol": sym, "strike": m["strike"], "opt": m["opt"], "expiry": m["expiry"],
-                                  "qty": p.qty, "lots": abs(p.qty) // p.instrument.lot_size, "avg": round(p.avg_price, 2),
-                                  "ltp": px, "pnl": round(p.unrealized(px), 2), "stop": p.stop_loss,
-                                  "movable": m["expiry"] == self.expiry and m["underlying"] == self.underlying})
+                                  "underlying": u, "qty": p.qty, "lots": abs(p.qty) // p.instrument.lot_size,
+                                  "avg": round(p.avg_price, 2), "ltp": px, "pnl": round(p.unrealized(px), 2),
+                                  "pnl_pct": round((px / p.avg_price - 1) * 100 * (1 if long else -1), 1) if p.avg_price else 0,
+                                  "stop": p.stop_loss, "breakeven": round(be, 2), "desc": desc,
+                                  "movable": m["expiry"] == self.expiry and u == self.underlying})
             positions.sort(key=lambda r: (r["qty"] > 0, r["strike"]))
             closed = [{"symbol": t.symbol, "qty": t.qty, "side": t.side, "entry": t.entry_price, "exit": t.exit_price,
                        "net": round(t.net_pnl, 2), "why": t.exit_reason, "time": t.exit_time.strftime("%H:%M:%S")}
@@ -329,7 +406,20 @@ class OptionTerminal:
                 "halted": self.risk.halted, "halt_reason": self.risk.halt_reason,
                 "trades_today": self.risk.trades_today, "max_trades": self.risk.cfg.max_trades_per_day,
                 "messages": self.messages[::-1][:8],
+                "analytics": ch.analytics() if ch else {},
+                "days_to_expiry": self._days_to_expiry(),
+                "limits": {"capital": self.cfg.capital,
+                           "daily_loss_limit": round(self.risk.day_start_equity * self.risk.cfg.max_daily_loss_pct / 100, 0),
+                           "risk_per_trade": round(self.broker.equity() * self.risk.cfg.risk_per_trade_pct / 100, 0),
+                           "min_premium": self.cfg.min_premium},
             }
+
+    def _days_to_expiry(self) -> float | None:
+        if not self.expiry:
+            return None
+        now = self.clock()
+        exp = datetime.fromisoformat(self.expiry).replace(hour=15, minute=30, tzinfo=now.tzinfo)
+        return round(max((exp - now).total_seconds(), 0) / 86400, 1)
 
     # --- persistence (same files as paper runs, so `report --prefix terminal` works) -----
     def save(self) -> None:

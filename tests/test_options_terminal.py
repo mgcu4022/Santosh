@@ -9,6 +9,7 @@ import pytest
 
 from tradebot.options.chain import Chain, Leg, SimOptions, bs_price, parse_upstox_chain
 from tradebot.options.engine import OptionTerminal, TerminalConfig, TerminalError
+from tradebot.models import Side
 from tradebot.risk import RiskConfig
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -210,3 +211,70 @@ def test_http_api_roundtrip(term):
         assert not post("/api/order", {"side": "BUY"})["ok"]          # malformed request handled
     finally:
         srv.shutdown()
+
+
+# --- order ticket, minimum premium, stops, analytics ------------------------------------------
+def test_preview_explains_without_placing(term):
+    term.market.set(23200, "CE", 60)
+    term.tick()
+    p = term.preview("BUY", "CE", 23200, 1)
+    assert p["approved"] and p["value"] == 3900 and p["breakeven"] == 23260
+    assert p["stop"] == 42.0 and p["loss_at_stop"] > 18 * 65          # 30% stop plus charges
+    assert any("PAY" in t for t in p["text"])
+    assert term.state()["positions"] == [] and term.risk.trades_today == 0   # nothing placed
+    big = term.preview("BUY", "CE", 23200, 50)
+    assert not big["approved"] and big["max_lots"] >= 1
+
+
+def test_preview_for_sell_shows_margin_and_risk_words(term):
+    term.market.set(23400, "CE", 20)
+    term.tick()
+    p = term.preview("SELL", "CE", 23400, 1)
+    assert p["approved"] and p["margin"] == pytest.approx(0.12 * 23200 * 65, rel=0.01)
+    assert p["breakeven"] == 23420 and any("RECEIVE" in t for t in p["text"])
+
+
+def test_tiny_premiums_blocked_and_stops_never_equal_price(term):
+    term.market.set(23400, "CE", 0.05)
+    term.market.set(23000, "PE", 0.6)
+    term.tick()
+    with pytest.raises(TerminalError, match="below Rs0.5"):
+        term.place("SELL", "CE", 23400, 1)
+    term.place("BUY", "PE", 23000, 1)
+    pos = term.state()["positions"][0]
+    assert pos["stop"] < 0.6 and pos["stop"] == 0.4              # at least a tick below the price
+    term.tick()
+    assert term.state()["positions"], "must not be stopped out instantly"
+    assert term._stop_for(Side.SELL, 0.5) >= 0.55
+
+
+def test_chain_analytics_support_resistance():
+    rows = {float(k): {"CE": Leg(ltp=10, oi=oi_c), "PE": Leg(ltp=10, oi=oi_p)}
+            for k, oi_c, oi_p in [(23000, 100, 900), (23100, 300, 400), (23200, 500, 300), (23300, 1200, 100)]}
+    a = Chain("NIFTY", "2026-11-10", 23150, rows).analytics()
+    assert a["support"] == 23000 and a["resistance"] == 23300 and a["pcr"] == round(1700 / 2100, 2)
+    assert 23000 <= a["max_pain"] <= 23300
+
+
+def test_simulator_moves_about_one_percent_a_day():
+    t = {"t": datetime(2026, 11, 2, 9, 15, tzinfo=IST)}
+    moves = []
+    for seed in range(20):
+        sim = SimOptions(seed=seed, clock=lambda: t["t"])
+        e = sim.expiries("NIFTY")[1]
+        t["t"] = datetime(2026, 11, 2, 9, 15, tzinfo=IST)
+        sim.chain("NIFTY", e)
+        for _ in range(375):
+            t["t"] += timedelta(minutes=1)
+            ch = sim.chain("NIFTY", e)
+        moves.append(abs(ch.spot / 23200 - 1))
+    assert 0.003 < sum(moves) / len(moves) < 0.02                  # ~1% daily, not 2% in minutes
+
+
+def test_state_has_plain_language_fields(term):
+    term.place("BUY", "PE", 23200, 1)
+    s = term.state()
+    pos = s["positions"][0]
+    assert "gains if NIFTY falls" in pos["desc"] and pos["breakeven"] == 23100
+    assert s["limits"]["daily_loss_limit"] == 15000 and s["days_to_expiry"] > 7
+    assert {"pcr", "support", "resistance", "max_pain"} <= set(s["analytics"])

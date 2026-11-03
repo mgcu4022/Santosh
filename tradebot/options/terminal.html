@@ -6,261 +6,509 @@
 <title>Option Terminal</title>
 <style>
   :root {
-    --bg: #0f1218; --panel: #161b24; --panel2: #1c2230; --line: #2a3242; --text: #e6e9ef; --muted: #8b94a7;
-    --green: #22c55e; --green-bg: #12301f; --red: #ef4444; --red-bg: #3a1618; --blue: #3b82f6;
-    --atm: #233456; --itm: #1a2130; --amber: #f59e0b;
+    --bg: #0e1117; --panel: #161b24; --panel2: #1d2330; --line: #2b3343; --text: #e8ebf1; --muted: #93a0b5;
+    --green: #22c55e; --green-bg: #11301e; --red: #f05252; --red-bg: #3a1618; --blue: #60a5fa; --amber: #f5b301;
+    --atm: #22355a; --itm: #18202e; --bar-ce: #1e3a66; --bar-pe: #5a2330;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.35 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
   .num { font-variant-numeric: tabular-nums; }
   .pos { color: var(--green); } .neg { color: var(--red); } .muted { color: var(--muted); }
   button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel2); color: var(--text);
-           border-radius: 5px; padding: 3px 8px; }
+           border-radius: 6px; padding: 4px 10px; }
   button:hover { border-color: var(--muted); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
   select, input { font: inherit; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-                  border-radius: 5px; padding: 3px 6px; }
-  input[type=number] { width: 90px; }
+                  border-radius: 6px; padding: 4px 8px; }
+  input[type=number] { width: 92px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
 
-  header { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 10px 14px;
+  /* header */
+  header { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; padding: 10px 16px;
            background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
-  .stat { display: flex; flex-direction: column; }
-  .stat small { color: var(--muted); font-size: 11px; }
-  .stat b { font-size: 15px; }
-  .spot b { font-size: 19px; }
-  .badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 99px; letter-spacing: .03em; }
+  .spot b { font-size: 24px; } .spot small, .mtm small { display: block; color: var(--muted); font-size: 12px; }
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; letter-spacing: .03em; }
   .b-paper { background: #2b2410; color: var(--amber); } .b-demo { background: #1d2a44; color: #93c5fd; }
-  .mtm { margin-left: auto; text-align: right; }
-  .mtm b { font-size: 22px; }
+  .mtm { margin-left: auto; text-align: right; } .mtm b { font-size: 24px; }
+  .help { width: 30px; height: 30px; padding: 0; border-radius: 50%; font-weight: 700; }
 
-  .rules { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 14px; background: var(--panel2);
-           border-bottom: 1px solid var(--line); }
-  .exitall { background: var(--red); border-color: var(--red); color: #fff; font-weight: 700; margin-left: auto; }
-  .halt { background: var(--red-bg); color: #fecaca; padding: 8px 14px; font-weight: 600; display: none; }
+  .wrap { padding: 12px 16px; display: grid; gap: 12px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+  .card .k { color: var(--muted); font-size: 12px; }
+  .card .v { font-size: 18px; font-weight: 650; margin: 2px 0; }
+  .card .e { color: var(--muted); font-size: 12px; }
 
-  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 12px; padding: 12px 14px; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .card h3 { margin: 0; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid var(--line); display: flex;
-             gap: 10px; align-items: center; flex-wrap: wrap; }
+  .risk { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; align-items: start; }
+  .meter { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; margin: 6px 0 4px; }
+  .meter i { display: block; height: 100%; background: var(--green); border-radius: 99px; transition: width .4s; }
+  .meter i.warn { background: var(--amber); } .meter i.bad { background: var(--red); }
+  .rules { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .exitall { background: var(--red); border-color: var(--red); color: #fff; font-weight: 700; }
+  .halt { background: var(--red-bg); color: #fecaca; padding: 10px 14px; border-radius: 10px; font-weight: 600; display: none; }
+
+  main { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 12px; }
+  @media (max-width: 1150px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: 0; }
+  .ph { padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .ph b { font-size: 15px; }
   .scroll { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
-  th { color: var(--muted); font-weight: 600; font-size: 11px; text-align: right; padding: 6px 8px;
-       border-bottom: 1px solid var(--line); white-space: nowrap; background: var(--panel2); }
-  td { padding: 4px 8px; text-align: right; border-bottom: 1px solid #1f2633; white-space: nowrap; }
-  th.c, td.c { text-align: center; }
-  th.l, td.l { text-align: left; }
+  th { color: var(--muted); font-weight: 600; font-size: 11.5px; padding: 6px 8px; border-bottom: 1px solid var(--line);
+       white-space: nowrap; background: var(--panel2); text-align: right; }
+  td { padding: 5px 8px; text-align: right; border-bottom: 1px solid #1f2633; white-space: nowrap; }
+  .c { text-align: center !important; } .l { text-align: left !important; }
+  .side-h th { font-size: 12px; text-transform: none; white-space: normal; }
+  .side-h .ce-h { color: var(--blue); text-align: center; } .side-h .pe-h { color: #fca5a5; text-align: center; }
   .strike { font-weight: 700; background: var(--panel2); text-align: center; }
   tr.atm td { background: var(--atm); }
   td.itm { background: var(--itm); }
-  .bs { padding: 1px 7px; font-weight: 700; font-size: 11px; }
+  tr.spotline td { background: transparent; border-bottom: 2px solid var(--amber); color: var(--amber); font-weight: 700;
+                   text-align: center; padding: 2px; font-size: 12px; }
+  .bs { padding: 2px 9px; font-weight: 700; font-size: 12px; }
   .b { background: var(--green-bg); color: var(--green); border-color: #1d5a35; }
   .s { background: var(--red-bg); color: var(--red); border-color: #6b2124; }
-  .ce { color: #93c5fd; font-weight: 600; } .pe { color: #fca5a5; font-weight: 600; }
-  .actions { display: flex; gap: 4px; justify-content: flex-end; align-items: center; }
-  .actions button { padding: 1px 6px; font-size: 12px; }
-  .log { max-height: 220px; overflow-y: auto; }
-  .msg { padding: 4px 12px; border-bottom: 1px solid #1f2633; }
+  .oi { position: relative; }
+  .oi span { position: relative; z-index: 1; }
+  .oi { min-width: 64px; }
+  .oi i { position: absolute; top: 4px; bottom: 4px; border-radius: 3px; opacity: .9; max-width: 56px; }
+  .oi.ce i { right: 4px; background: var(--bar-ce); } .oi.pe i { left: 4px; background: var(--bar-pe); }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 8px 12px; color: var(--muted); font-size: 12px; }
+  .legend em { font-style: normal; display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+
+  .poslist { display: grid; gap: 8px; padding: 10px; }
+  .pcard { border: 1px solid var(--line); border-left: 4px solid var(--blue); border-radius: 8px; padding: 8px 10px; background: var(--panel2); }
+  .pcard.short { border-left-color: var(--amber); }
+  .pcard .t { font-weight: 650; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .pcard .d { color: var(--muted); font-size: 12.5px; margin: 2px 0 6px; }
+  .pgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 10px; font-size: 13px; }
+  .pgrid small { display: block; color: var(--muted); font-size: 11px; }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+  .acts button { padding: 3px 9px; }
+  .empty { padding: 18px; text-align: center; color: var(--muted); }
+  .log { max-height: 230px; overflow-y: auto; }
+  .msg { padding: 5px 12px; border-bottom: 1px solid #1f2633; font-size: 13px; }
   .msg.error { color: #fca5a5; } .msg.warn { color: #fcd34d; } .msg.ok { color: #86efac; }
+  #payoff { width: 100%; height: 220px; display: block; }
+  .pnote { padding: 0 12px 10px; color: var(--muted); font-size: 12.5px; }
+
+  /* modals */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center;
+             z-index: 20; padding: 16px; }
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; width: min(560px, 100%);
+           max-height: 90vh; overflow-y: auto; padding: 16px; }
+  .modal h3 { margin: 0 0 4px; font-size: 18px; }
+  .verdict { padding: 8px 10px; border-radius: 8px; margin: 10px 0; font-weight: 600; }
+  .verdict.ok { background: var(--green-bg); color: #bbf7d0; } .verdict.no { background: var(--red-bg); color: #fecaca; }
+  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; margin: 10px 0; }
+  .facts div { display: flex; justify-content: space-between; border-bottom: 1px dashed var(--line); padding: 3px 0; }
+  .explain { margin: 8px 0; padding-left: 18px; } .explain li { margin: 4px 0; }
+  .mrow { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+  .confirm { background: var(--green); border-color: var(--green); color: #052e14; font-weight: 700; }
+  .confirm.sell { background: var(--red); border-color: var(--red); color: #fff; }
+  dl { margin: 0; } dt { font-weight: 700; margin-top: 10px; } dd { margin: 2px 0 0; color: var(--muted); }
   #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 8px;
-           background: #111827; border: 1px solid var(--line); display: none; z-index: 9; max-width: 90vw; }
+           background: #111827; border: 1px solid var(--line); display: none; z-index: 30; max-width: 92vw; }
   #toast.err { border-color: var(--red); color: #fecaca; } #toast.ok { border-color: var(--green); color: #bbf7d0; }
-  .empty { padding: 16px; text-align: center; color: var(--muted); }
+  .foot { padding: 0 16px 18px; color: var(--muted); font-size: 12px; }
+
   @media (max-width: 640px) {
     .w { display: none; }
-    td, th { padding: 4px 5px; }
-    .bs { padding: 1px 5px; }
-    .actions button { padding: 1px 4px; }
-    .actions { flex-wrap: wrap; row-gap: 4px; }
-    #pos td { white-space: normal; }
-    #pos select { max-width: 74px; }
-    .postable th:nth-child(9) { display: none; }
-    .postable td:nth-child(9) { display: none; }
-    .mmove { display: flex !important; }
+    td, th { padding: 4px 4px; }
+    .bs { padding: 2px 6px; }
+    .pgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .facts { grid-template-columns: 1fr; }
+    .mtm { margin-left: 0; text-align: left; }
   }
-  .mmove { display: none; }
-  .foot { padding: 6px 14px 16px; color: var(--muted); font-size: 11.5px; }
 </style>
 </head>
 <body>
 <header>
   <select id="und" title="Index"></select>
-  <select id="exp" title="Expiry"></select>
-  <div class="stat spot"><small>Spot</small><b class="num" id="spot">–</b></div>
-  <div class="stat"><small>Change</small><b class="num" id="chg">–</b></div>
-  <div class="stat"><small>High / Low</small><b class="num" id="hl">–</b></div>
-  <div class="stat"><small>Syn. Future</small><b class="num" id="syn">–</b></div>
-  <div class="stat"><small>ATM straddle</small><b class="num" id="strad">–</b></div>
-  <span class="badge b-paper">PAPER</span><span class="badge b-demo" id="mode" style="display:none">DEMO DATA</span>
+  <select id="exp" title="Expiry date"></select>
+  <div class="spot"><small id="undlabel">NIFTY spot</small><b class="num" id="spot">–</b>
+    <span class="num" id="chg"></span></div>
+  <div class="spot w"><small>Day range</small><span class="num" id="hl">–</span></div>
+  <span class="badge b-paper" title="Practice money: no real orders are sent">PAPER</span>
+  <span class="badge b-demo" id="mode" style="display:none" title="Simulated prices, not the real market">DEMO DATA</span>
   <span class="muted num" id="clock"></span>
-  <div class="stat mtm"><small>MTM today</small><b class="num" id="mtm">0</b>
+  <div class="mtm"><small>Today's profit / loss (MTM)</small><b class="num" id="mtm">0</b>
     <small class="num" id="mtmsub"></small></div>
+  <button class="help" id="helpbtn" title="What do these words mean?">?</button>
 </header>
 
-<div class="rules">
-  <label>MTM stop-loss ₹ <input type="number" id="r_sl" min="0" step="500"></label>
-  <label>MTM target ₹ <input type="number" id="r_tg" min="0" step="500"></label>
-  <button id="saverules">Save rules</button>
-  <span class="muted" id="rulesinfo"></span>
-  <label class="muted"><input type="checkbox" id="confirm"> Confirm each order</label>
-  <button class="exitall" id="exitall">EXIT ALL</button>
+<div class="wrap">
+  <section>
+    <h2>Market today <span class="muted" style="text-transform:none;letter-spacing:0">(from the option chain)</span></h2>
+    <div class="cards" id="mkt"></div>
+  </section>
+
+  <section>
+    <h2>Your safety limits</h2>
+    <div class="risk">
+      <div class="card"><div class="k">Loss used today vs daily limit</div><div class="meter"><i id="m_loss"></i></div>
+        <div class="e num" id="t_loss"></div></div>
+      <div class="card"><div class="k">Money blocked as margin</div><div class="meter"><i id="m_margin"></i></div>
+        <div class="e num" id="t_margin"></div></div>
+      <div class="card"><div class="k">Trades used today</div><div class="meter"><i id="m_trades"></i></div>
+        <div class="e num" id="t_trades"></div></div>
+      <div class="card">
+        <div class="k">Auto exit rules (whole account)</div>
+        <div class="rules" style="margin-top:6px">
+          <label>Stop at loss ₹ <input type="number" id="r_sl" min="0" step="500"></label>
+          <label>Book at profit ₹ <input type="number" id="r_tg" min="0" step="500"></label>
+          <button id="saverules">Save</button>
+          <button class="exitall" id="exitall">EXIT ALL</button>
+        </div>
+        <div class="e" id="rulesinfo" style="margin-top:6px"></div>
+      </div>
+    </div>
+  </section>
+  <div class="halt" id="halt"></div>
+
+  <main>
+    <section class="panel">
+      <div class="ph"><b>Option chain</b>
+        <label class="muted">Lots <input type="number" id="lots" value="1" min="1" style="width:64px"></label>
+        <span class="muted num" id="qtyinfo"></span>
+        <label class="muted" style="margin-left:auto" title="Place orders without the order ticket"><input type="checkbox" id="fast"> Fast mode</label>
+      </div>
+      <div class="scroll"><table>
+        <thead>
+          <tr class="side-h"><th colspan="2" class="w"></th><th colspan="2" class="ce-h">CALLS (CE): gain if price rises</th>
+            <th class="c">Strike</th>
+            <th colspan="2" class="pe-h">PUTS (PE): gain if price falls</th><th colspan="2" class="w"></th></tr>
+          <tr><th class="w" title="Open contracts at this strike">OI</th><th class="w" title="Price change vs yesterday">Chg</th><th>Price</th><th class="c">Trade</th>
+            <th class="c"></th><th class="c">Trade</th><th>Price</th><th class="w" title="Price change vs yesterday">Chg</th><th class="w" title="Open contracts at this strike">OI</th></tr>
+        </thead>
+        <tbody id="chain"></tbody>
+      </table></div>
+      <div class="legend">
+        <span><em style="background:var(--atm)"></em>ATM: strike nearest the price</span>
+        <span><em style="background:var(--itm)"></em>Shaded: in-the-money</span>
+        <span><em style="background:var(--amber)"></em>Orange line: current price</span>
+        <span><em style="background:var(--bar-ce)"></em><em style="background:var(--bar-pe)"></em>OI bars: open contracts (bigger = stronger level)</span>
+        <span>Chg: price change vs yesterday</span>
+        <span>B = buy, S = sell. Click to see an order ticket first.</span>
+      </div>
+    </section>
+
+    <section style="display:grid;gap:12px;align-content:start;min-width:0">
+      <div class="panel">
+        <div class="ph"><b>Your positions</b><span class="muted num" id="posinfo"></span></div>
+        <div class="poslist" id="pos"></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><b>Profit / loss at expiry</b><span class="muted" id="payinfo"></span></div>
+        <svg id="payoff" viewBox="0 0 600 220" preserveAspectRatio="none" role="img" aria-label="Payoff chart"></svg>
+        <div class="pnote" id="paynote">Shows what your open positions would make or lose at expiry for each index level.</div>
+      </div>
+      <div class="panel">
+        <div class="ph"><b>Closed trades</b></div>
+        <div class="scroll log"><table>
+          <thead><tr><th class="l">Time</th><th class="l">Option</th><th>Qty</th><th class="w">Entry</th><th class="w">Exit</th><th>Net P&amp;L</th><th class="l">Why closed</th></tr></thead>
+          <tbody id="closed"></tbody>
+        </table></div>
+      </div>
+      <div class="panel"><div class="ph"><b>Activity</b></div><div class="log" id="msgs"></div></div>
+    </section>
+  </main>
 </div>
-<div class="halt" id="halt"></div>
-
-<main>
-  <section class="card">
-    <h3>Option chain
-      <label class="muted">Lots <input type="number" id="lots" value="1" min="1" style="width:60px"></label>
-      <span class="muted num" id="qtyinfo"></span>
-    </h3>
-    <div class="scroll"><table>
-      <thead><tr>
-        <th class="w">OI</th><th class="w">IV</th><th>Call LTP</th><th class="c">Call</th>
-        <th class="c">Strike</th>
-        <th class="c">Put</th><th>Put LTP</th><th class="w">IV</th><th class="w">OI</th>
-      </tr></thead>
-      <tbody id="chain"></tbody>
-    </table></div>
-  </section>
-
-  <section style="display:flex;flex-direction:column;gap:12px;min-width:0">
-    <div class="card">
-      <h3>Positions <span class="muted num" id="posinfo"></span></h3>
-      <div class="scroll"><table class="postable">
-        <thead><tr><th class="l">Strike</th><th class="c">Type</th><th>Qty</th><th class="w">Avg</th><th>LTP</th><th class="w">SL</th><th>P&amp;L</th>
-          <th class="c">Add / Exit</th><th class="c">Move to</th></tr></thead>
-        <tbody id="pos"></tbody>
-      </table></div>
-    </div>
-    <div class="card">
-      <h3>Closed trades</h3>
-      <div class="scroll log"><table>
-        <thead><tr><th class="l">Time</th><th class="l">Symbol</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Net P&amp;L</th><th class="l">Why</th></tr></thead>
-        <tbody id="closed"></tbody>
-      </table></div>
-    </div>
-    <div class="card"><h3>Activity</h3><div class="log" id="msgs"></div></div>
-  </section>
-</main>
 <div class="foot">Paper trading: no real orders are sent. Every new position passes the risk agent (lot limits, margin,
-  entry window) and gets an automatic premium stop-loss. Not investment advice.</div>
+  entry window) and gets an automatic premium stop-loss. Research tool, not investment advice.</div>
+
+<!-- order ticket -->
+<div class="overlay" id="ticketbg"><div class="modal" id="ticket"></div></div>
+<!-- help -->
+<div class="overlay" id="helpbg"><div class="modal">
+  <h3>What the words mean</h3>
+  <dl>
+    <dt>Call (CE)</dt><dd>Gains when the index rises. Buying a call = bullish. Selling a call = you expect it NOT to rise above the strike.</dd>
+    <dt>Put (PE)</dt><dd>Gains when the index falls. Buying a put = bearish. Selling a put = you expect it NOT to fall below the strike.</dd>
+    <dt>Strike</dt><dd>The index level the option is based on.</dd>
+    <dt>Price / premium (LTP)</dt><dd>Last traded price of one unit. Total cost = price x quantity (lots x lot size).</dd>
+    <dt>ATM / in-the-money</dt><dd>ATM = strike closest to the current price. In-the-money options already have value from the current price.</dd>
+    <dt>Open contracts (OI)</dt><dd>How many contracts are open at that strike. Big call OI often acts as resistance, big put OI as support.</dd>
+    <dt>PCR</dt><dd>Put OI divided by call OI. Above 1: more puts written (traders expect support). Below 1: more calls written.</dd>
+    <dt>Max pain</dt><dd>The expiry level where option buyers in total would gain the least. Prices sometimes drift toward it near expiry.</dd>
+    <dt>Expected move (straddle)</dt><dd>ATM call + put price. Roughly how far the market expects the index could move by expiry.</dd>
+    <dt>IV</dt><dd>Implied volatility: how much movement the option prices assume. Higher IV = costlier options.</dd>
+    <dt>Breakeven</dt><dd>Index level at expiry where the trade makes zero before charges.</dd>
+    <dt>MTM</dt><dd>Mark-to-market: today's booked plus open profit/loss, after charges.</dd>
+    <dt>Margin</dt><dd>Money blocked by the broker. Buying options blocks the premium; selling blocks much more (about 12% of index value per unit).</dd>
+    <dt>Stop-loss (SL)</dt><dd>Price at which a position closes automatically to limit the loss.</dd>
+  </dl>
+  <div class="mrow"><button id="helpclose">Close</button></div>
+</div></div>
 <div id="toast"></div>
 
 <script>
 const $ = id => document.getElementById(id);
-const fmt = (x, d = 2) => x == null ? "–" : Number(x).toLocaleString("en-IN", {minimumFractionDigits: d, maximumFractionDigits: d});
+const fmt = (x, d = 2) => x == null || isNaN(x) ? "–" : Number(x).toLocaleString("en-IN", {minimumFractionDigits: d, maximumFractionDigits: d});
+const rs = (x, d = 0) => x == null ? "–" : (x < 0 ? "-₹" : "₹") + fmt(Math.abs(x), d);
 const cls = x => x > 0 ? "pos" : x < 0 ? "neg" : "";
-const kfmt = x => x >= 1e5 ? (x / 1e5).toFixed(1) + "L" : x >= 1e3 ? (x / 1e3).toFixed(0) + "K" : x;
-let S = null, rulesTouched = false;
+const kfmt = x => x >= 1e7 ? (x / 1e7).toFixed(1) + "Cr" : x >= 1e5 ? (x / 1e5).toFixed(1) + "L" : x >= 1e3 ? (x / 1e3).toFixed(0) + "K" : String(x);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+let S = null, rulesTouched = false, ticketArgs = null;
 const moveSel = {};
 
 function toast(text, ok) {
   const t = $("toast"); t.textContent = text; t.className = ok ? "ok" : "err"; t.style.display = "block";
-  clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = "none", 3500);
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = "none", 4000);
 }
-async function post(path, body) {
+async function post(path, body, quiet) {
   try {
     const r = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
     const j = await r.json();
-    if (!j.ok) toast(j.error || "Failed", false);
-    else if (j.price != null) toast(`Filled @ ${fmt(j.price)}`, true);
+    if (!j.ok && !quiet) toast(j.error || "Failed", false);
+    else if (j.ok && j.price != null && !quiet) toast(`Done at ₹${fmt(j.price)}`, true);
     refresh();
     return j;
   } catch (e) { toast("Terminal not reachable: " + e, false); }
 }
-function order(side, opt, strike) {
-  const lots = parseInt($("lots").value) || 1;
-  if ($("confirm").checked && !confirm(`${side} ${lots} lot(s) ${strike} ${opt}?`)) return;
-  post("/api/order", {side, opt, strike, lots});
-}
+const lots = () => Math.max(1, parseInt($("lots").value) || 1);
 
+/* ---------- order ticket ---------- */
+async function order(side, opt, strike) {
+  if ($("fast").checked) return post("/api/order", {side, opt, strike, lots: lots()});
+  ticketArgs = {side, opt, strike, lots: lots()};
+  await showTicket();
+}
+async function showTicket() {
+  const a = ticketArgs;
+  const r = await fetch("/api/preview", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(a)});
+  const p = await r.json();
+  if (!p.ok) return toast(p.error || "Cannot price this option", false);
+  const sell = a.side === "SELL", word = a.opt === "CE" ? "CALL" : "PUT";
+  const facts = p.closing ? "" : `<div class="facts num">
+      <div><span class="muted">Price now</span><b>₹${fmt(p.est_price)}</b></div>
+      <div><span class="muted">Quantity</span><b>${p.qty} (${p.lots} x ${p.lot_size})</b></div>
+      <div><span class="muted">${sell ? "You receive" : "You pay"}</span><b>${rs(p.value)}</b></div>
+      <div><span class="muted">Margin blocked</span><b>${rs(p.margin)}</b></div>
+      <div><span class="muted">Stop-loss price</span><b>${p.stop != null ? "₹" + fmt(p.stop) : "–"}</b></div>
+      <div><span class="muted">Loss if stop hits</span><b class="neg">${p.loss_at_stop != null ? rs(-p.loss_at_stop) : "–"}</b></div>
+      <div><span class="muted">Breakeven at expiry</span><b>${p.breakeven != null ? fmt(p.breakeven, 0) : "–"}</b></div>
+      <div><span class="muted">Charges (approx.)</span><b>${rs(p.charges)}</b></div></div>`;
+  const allowed = p.approved;
+  $("ticket").innerHTML = `
+    <h3>${a.side} ${p.lots} lot(s) · ${S.underlying} ${fmt(p.strike, 0)} ${word}</h3>
+    <div class="muted">${sell ? "Selling" : "Buying"} a ${word.toLowerCase()} = ${
+      a.opt === "CE" ? (sell ? "you expect the index NOT to rise much" : "you expect the index to rise")
+                     : (sell ? "you expect the index NOT to fall much" : "you expect the index to fall")}.</div>
+    <div class="verdict ${allowed ? "ok" : "no"}">${allowed ? "✓ Risk agent: allowed" : "✕ Risk agent: blocked. " + esc(p.reason)}
+      ${!allowed && p.max_lots > 0 ? `<br>You can do up to <b>${p.max_lots}</b> lot(s).` : ""}</div>
+    ${facts}
+    <ul class="explain">${(p.text || []).map(t => `<li>${esc(t).replace(/Rs/g, "₹")}</li>`).join("")}</ul>
+    <div class="mrow">
+      <label class="muted">Lots <input type="number" id="tlots" value="${a.lots}" min="1" style="width:64px"></label>
+      ${!allowed && p.max_lots > 0 ? `<button id="tuse">Use ${p.max_lots} lot(s)</button>` : ""}
+      <button id="tcancel">Cancel</button>
+      <button id="tgo" class="confirm ${sell ? "sell" : ""}" ${allowed ? "" : "disabled"}>${a.side} ${p.lots} lot(s)</button>
+    </div>`;
+  $("ticketbg").style.display = "flex";
+  $("tcancel").onclick = closeTicket;
+  $("tlots").onchange = e => { ticketArgs.lots = Math.max(1, parseInt(e.target.value) || 1); showTicket(); };
+  if ($("tuse")) $("tuse").onclick = () => { ticketArgs.lots = p.max_lots; showTicket(); };
+  $("tgo").onclick = async () => { const j = await post("/api/order", ticketArgs); if (j && j.ok) closeTicket(); };
+}
+function closeTicket() { $("ticketbg").style.display = "none"; ticketArgs = null; }
+$("ticketbg").onclick = e => { if (e.target.id === "ticketbg") closeTicket(); };
+$("helpbtn").onclick = () => $("helpbg").style.display = "flex";
+$("helpclose").onclick = () => $("helpbg").style.display = "none";
+$("helpbg").onclick = e => { if (e.target.id === "helpbg") $("helpbg").style.display = "none"; };
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeTicket(); $("helpbg").style.display = "none"; } });
+
+/* ---------- header, market, risk ---------- */
 function renderHeader(s) {
+  $("undlabel").textContent = `${s.underlying} price`;
   $("spot").textContent = fmt(s.spot);
   if (s.prev_close) {
     const c = s.spot - s.prev_close;
-    $("chg").innerHTML = `<span class="${cls(c)}">${c >= 0 ? "+" : ""}${fmt(c)} (${(c / s.prev_close * 100).toFixed(2)}%)</span>`;
+    $("chg").innerHTML = `<span class="${cls(c)}">${c >= 0 ? "▲ +" : "▼ "}${fmt(c)} (${(c / s.prev_close * 100).toFixed(2)}%)</span>`;
   }
-  $("hl").textContent = s.high ? `${fmt(s.high, 0)} / ${fmt(s.low, 0)}` : "–";
-  $("syn").textContent = fmt(s.syn_future);
-  $("strad").textContent = fmt(s.straddle);
+  $("hl").textContent = s.high ? `${fmt(s.low, 0)} – ${fmt(s.high, 0)}` : "–";
   $("clock").textContent = s.time;
   $("mode").style.display = s.mode === "demo" ? "" : "none";
-  $("mtm").textContent = (s.mtm >= 0 ? "+" : "") + fmt(s.mtm);
+  $("mtm").textContent = (s.mtm > 0 ? "+" : s.mtm < 0 ? "-" : "") + "₹" + fmt(Math.abs(s.mtm));
   $("mtm").className = "num " + cls(s.mtm);
-  $("mtmsub").textContent = `Booked ${fmt(s.realized, 0)} · Open ${fmt(s.unrealized, 0)} · Margin ${fmt(s.margin_used, 0)}`;
-  $("qtyinfo").textContent = `= ${(parseInt($("lots").value) || 1) * s.lot_size} qty (lot ${s.lot_size})`;
-  if (!rulesTouched) { $("r_sl").value = s.rules.mtm_stop_loss; $("r_tg").value = s.rules.mtm_target; }
-  $("rulesinfo").textContent = `Per-position SL: buys −${s.rules.buy_sl_pct}%, sells +${s.rules.sell_sl_pct}% · Trades ${s.trades_today}/${s.max_trades}`;
-  $("halt").style.display = s.halted ? "block" : "none";
-  $("halt").textContent = s.halted ? `Trading stopped for today: ${s.halt_reason}` : "";
+  $("mtmsub").textContent = `Booked ${rs(s.realized)} · Open ${rs(s.unrealized)}`;
+  $("qtyinfo").textContent = `= ${lots() * s.lot_size} qty (1 lot = ${s.lot_size})`;
   fillSelect($("und"), s.underlyings, s.underlying);
-  fillSelect($("exp"), s.expiries, s.expiry, e => new Date(e + "T00:00").toLocaleDateString("en-IN", {day: "numeric", month: "short"}));
+  fillSelect($("exp"), s.expiries, s.expiry, e => "Expiry " + new Date(e + "T00:00").toLocaleDateString("en-IN", {day: "numeric", month: "short"}));
 }
 function fillSelect(el, items, val, label) {
   const key = items.join(",");
   if (el.dataset.k !== key) { el.innerHTML = items.map(i => `<option value="${i}">${label ? label(i) : i}</option>`).join(""); el.dataset.k = key; }
   if (document.activeElement !== el) el.value = val;
 }
-
-function renderChain(s) {
-  $("chain").innerHTML = s.chain.map(r => {
-    const k = r.strike, citm = k < s.spot ? "itm" : "", pitm = k > s.spot ? "itm" : "";
-    return `<tr class="${r.atm ? "atm" : ""}">
-      <td class="num muted w ${citm}">${kfmt(r.ce.oi)}</td><td class="num muted w ${citm}">${r.ce.iv || "–"}</td>
-      <td class="num ${citm}">${fmt(r.ce.ltp)}</td>
-      <td class="c ${citm}"><button class="bs b" onclick="order('BUY','CE',${k})">B</button>
-        <button class="bs s" onclick="order('SELL','CE',${k})">S</button></td>
-      <td class="strike num">${k}</td>
-      <td class="c ${pitm}"><button class="bs b" onclick="order('BUY','PE',${k})">B</button>
-        <button class="bs s" onclick="order('SELL','PE',${k})">S</button></td>
-      <td class="num ${pitm}">${fmt(r.pe.ltp)}</td><td class="num muted w ${pitm}">${r.pe.iv || "–"}</td>
-      <td class="num muted w ${pitm}">${kfmt(r.pe.oi)}</td></tr>`;
-  }).join("") || `<tr><td colspan="9" class="empty">Waiting for market data…</td></tr>`;
+function renderMarket(s) {
+  const a = s.analytics || {}, u = s.underlying, d = s.days_to_expiry;
+  const pcrTxt = a.pcr == null ? "" : a.pcr > 1.2 ? "Many more puts written: traders see support below"
+    : a.pcr < 0.8 ? "Many more calls written: traders see a ceiling above" : "Balanced between puts and calls";
+  const lo = s.straddle && s.spot ? s.spot - s.straddle : null, hi = s.straddle && s.spot ? s.spot + s.straddle : null;
+  const cards = [
+    ["Expected move by expiry", s.straddle ? "± " + fmt(s.straddle, 0) : "–",
+      lo ? `Market prices ${u} roughly between ${fmt(lo, 0)} and ${fmt(hi, 0)}` : ""],
+    ["Support (most puts)", a.support ? fmt(a.support, 0) : "–",
+      a.support ? `${fmt(Math.abs(s.spot - a.support), 0)} pts ${a.support < s.spot ? "below" : "above"} the price` : ""],
+    ["Resistance (most calls)", a.resistance ? fmt(a.resistance, 0) : "–",
+      a.resistance ? `${fmt(Math.abs(a.resistance - s.spot), 0)} pts ${a.resistance > s.spot ? "above" : "below"} the price` : ""],
+    ["Put/Call ratio (PCR)", a.pcr ?? "–", pcrTxt],
+    ["Max pain", a.max_pain ? fmt(a.max_pain, 0) : "–", "Level where option buyers gain least at expiry"],
+    ["Time left", d == null ? "–" : d < 1 ? `${Math.round(d * 24)} hours` : `${d} days`,
+      `Expiry ${s.expiry}${a.atm_iv ? ` · ATM IV ${a.atm_iv}%` : ""}${d != null && d < 1 ? " · options lose value fast today" : ""}`],
+  ];
+  $("mkt").innerHTML = cards.map(([k, v, e]) => `<div class="card"><div class="k">${k}</div><div class="v num">${v}</div><div class="e">${e}</div></div>`).join("");
+}
+function meter(id, used, limit) {
+  const pct = limit > 0 ? Math.min(100, Math.max(0, used / limit * 100)) : 0;
+  $(id).style.width = pct + "%";
+  $(id).className = pct >= 80 ? "bad" : pct >= 50 ? "warn" : "";
+}
+function renderRisk(s) {
+  const L = s.limits || {};
+  const lossUsed = Math.max(0, -s.mtm);
+  meter("m_loss", lossUsed, L.daily_loss_limit);
+  $("t_loss").textContent = `${rs(lossUsed)} of ${rs(L.daily_loss_limit)} · trading stops for the day at the limit`;
+  meter("m_margin", s.margin_used, s.equity);
+  $("t_margin").textContent = `${rs(s.margin_used)} of ${rs(s.equity)} capital`;
+  meter("m_trades", s.trades_today, s.max_trades);
+  $("t_trades").textContent = `${s.trades_today} of ${s.max_trades} · max risk per position ${rs(L.risk_per_trade)}`;
+  if (!rulesTouched) { $("r_sl").value = s.rules.mtm_stop_loss; $("r_tg").value = s.rules.mtm_target; }
+  $("rulesinfo").textContent = `Every position also has its own stop-loss: bought options exit at −${s.rules.buy_sl_pct}%, ` +
+    `sold options exit if the price rises +${s.rules.sell_sl_pct}%. Set 0 to turn a rule off.`;
+  $("halt").style.display = s.halted ? "block" : "none";
+  $("halt").textContent = s.halted ? `Trading stopped for today: ${s.halt_reason}. Positions were closed; new trades are blocked until tomorrow.` : "";
 }
 
+/* ---------- chain ---------- */
+function renderChain(s) {
+  const maxOI = Math.max(1, ...s.chain.flatMap(r => [r.ce.oi, r.pe.oi]));
+  let out = "", spotDone = false;
+  s.chain.forEach((r, idx) => {
+    const k = r.strike;
+    if (!spotDone && k > s.spot) {
+      out += `<tr class="spotline"><td colspan="9">${s.underlying} ${fmt(s.spot)} ▸ price is here</td></tr>`;
+      spotDone = true;
+    }
+    const citm = k < s.spot ? "itm" : "", pitm = k > s.spot ? "itm" : "";
+    const ch = x => x == null ? "–" : `<span class="${cls(x)}">${x > 0 ? "+" : ""}${x}%</span>`;
+    out += `<tr class="${r.atm ? "atm" : ""}">
+      <td class="num muted oi ce w ${citm}" title="${fmt(r.ce.oi, 0)} open call contracts"><i style="width:${r.ce.oi / maxOI * 80}%"></i><span>${kfmt(r.ce.oi)}</span></td>
+      <td class="num w ${citm}">${ch(r.ce.chg_pct)}</td>
+      <td class="num ${citm}"><b>${fmt(r.ce.ltp)}</b></td>
+      <td class="c ${citm}"><button class="bs b" title="Buy ${k} call" onclick="order('BUY','CE',${k})">B</button>
+        <button class="bs s" title="Sell ${k} call" onclick="order('SELL','CE',${k})">S</button></td>
+      <td class="strike num">${k}${r.atm ? " <small class='muted'>ATM</small>" : ""}</td>
+      <td class="c ${pitm}"><button class="bs b" title="Buy ${k} put" onclick="order('BUY','PE',${k})">B</button>
+        <button class="bs s" title="Sell ${k} put" onclick="order('SELL','PE',${k})">S</button></td>
+      <td class="num ${pitm}"><b>${fmt(r.pe.ltp)}</b></td>
+      <td class="num w ${pitm}">${ch(r.pe.chg_pct)}</td>
+      <td class="num muted oi pe w ${pitm}" title="${fmt(r.pe.oi, 0)} open put contracts"><i style="width:${r.pe.oi / maxOI * 80}%"></i><span>${kfmt(r.pe.oi)}</span></td></tr>`;
+  });
+  $("chain").innerHTML = out || `<tr><td colspan="9" class="empty">Waiting for market data…</td></tr>`;
+}
+
+/* ---------- positions ---------- */
 function renderPositions(s) {
-  const tb = $("pos");
-  if (tb.contains(document.activeElement) && document.activeElement.tagName === "SELECT") return; // don't disturb a choice
+  const box = $("pos");
+  if (box.contains(document.activeElement) && document.activeElement.tagName === "SELECT") return;
   const strikes = s.chain.map(r => r.strike);
   let total = 0;
-  tb.innerHTML = s.positions.map(p => {
+  box.innerHTML = s.positions.map(p => {
     total += p.pnl;
-    const sym = JSON.stringify(p.symbol).replace(/"/g, "&quot;");
+    const sym = esc(JSON.stringify(p.symbol));
+    const word = p.opt === "CE" ? "CALL" : "PUT", short = p.qty < 0;
     const opts = strikes.map(k => `<option value="${k}" ${String(moveSel[p.symbol] ?? p.strike) == String(k) ? "selected" : ""}>${k}</option>`).join("");
-    const move = p.movable ? `<select onchange="moveSel[${sym}]=this.value">${opts}</select>
-        <button onclick="moveTo(${sym})">Go</button>` : `<span class="muted">${p.expiry}</span>`;
-    return `<tr>
-      <td class="l num">${p.strike}</td><td class="c ${p.opt.toLowerCase()}">${p.opt}</td>
-      <td class="num ${p.qty < 0 ? "neg" : "pos"}">${p.qty}</td><td class="num w">${fmt(p.avg)}</td><td class="num">${fmt(p.ltp)}</td>
-      <td class="num muted w">${fmt(p.stop)}</td><td class="num ${cls(p.pnl)}">${fmt(p.pnl)}</td>
-      <td><div class="actions">
-        ${p.movable ? `<button title="Add lots (uses the Lots box)" onclick="addLots(${sym})">+${parseInt($("lots").value) || 1}L</button>` : ""}
-        <button onclick="post('/api/exit',{symbol:${sym},fraction:0.25})">¼</button>
-        <button onclick="post('/api/exit',{symbol:${sym},fraction:0.5})">½</button>
-        <button onclick="post('/api/exit',{symbol:${sym},fraction:1})">Exit</button></div>
-        <div class="actions mmove" style="margin-top:4px">${move}</div></td>
-      <td><div class="actions">${move}</div></td></tr>`;
-  }).join("") || `<tr><td colspan="9" class="empty">No open positions. Use B / S on the chain.</td></tr>`;
-  $("posinfo").innerHTML = s.positions.length ? `${s.positions.length} open · <span class="${cls(total)}">${fmt(total)}</span>` : "";
+    const slDist = p.ltp ? Math.abs(p.stop - p.ltp) / p.ltp * 100 : 0;
+    return `<div class="pcard ${short ? "short" : ""}">
+      <div class="t"><span>${short ? "SOLD" : "BOUGHT"} ${p.lots} lot(s) · ${fmt(p.strike, 0)} ${word}</span>
+        <span class="num ${cls(p.pnl)}">${rs(p.pnl)} <small>(${p.pnl_pct > 0 ? "+" : ""}${p.pnl_pct}%)</small></span></div>
+      <div class="d">${esc(p.desc)} · expiry ${p.expiry}</div>
+      <div class="pgrid num">
+        <div><small>${short ? "Sold at" : "Bought at"}</small>₹${fmt(p.avg)}</div>
+        <div><small>Price now</small>₹${fmt(p.ltp)}</div>
+        <div><small>Stop-loss</small>₹${fmt(p.stop)} <span class="muted">(${slDist.toFixed(0)}% away)</span></div>
+        <div><small>Breakeven at expiry</small>${fmt(p.breakeven, 0)}</div>
+      </div>
+      <div class="acts">
+        ${p.movable ? `<button title="Add lots (uses the Lots box)" onclick="addLots(${sym})">+${lots()} lot</button>` : ""}
+        <button title="Close a quarter" onclick="post('/api/exit',{symbol:${sym},fraction:0.25})">Close ¼</button>
+        <button title="Close half" onclick="post('/api/exit',{symbol:${sym},fraction:0.5})">Close ½</button>
+        <button title="Close all" onclick="post('/api/exit',{symbol:${sym},fraction:1})">Close all</button>
+        ${p.movable ? `<span class="muted" style="margin-left:auto">Shift to strike</span>
+          <select onchange="moveSel[${sym}]=this.value">${opts}</select><button onclick="moveTo(${sym})">Go</button>` : ""}
+      </div></div>`;
+  }).join("") || `<div class="empty">No open positions.<br>Click <b>B</b> (buy) or <b>S</b> (sell) next to a strike in the chain.</div>`;
+  $("posinfo").innerHTML = s.positions.length ? `${s.positions.length} open · <span class="${cls(total)}">${rs(total)}</span>` : "";
 }
-function addLots(sym) { post("/api/add", {symbol: sym, lots: parseInt($("lots").value) || 1}); }
+function addLots(sym) { post("/api/add", {symbol: sym, lots: lots()}); }
 function moveTo(sym) {
   const k = moveSel[sym]; if (!k) return toast("Pick a strike first", false);
-  if ($("confirm").checked && !confirm(`Move ${sym} to ${k}?`)) return;
+  if (!$("fast").checked && !confirm(`Close this position and open the same lots at strike ${k}?`)) return;
   post("/api/move", {symbol: sym, strike: parseFloat(k)}); delete moveSel[sym];
 }
 
+/* ---------- payoff chart ---------- */
+function renderPayoff(s) {
+  const svg = $("payoff"), pos = s.positions.filter(p => p.underlying === s.underlying);
+  const W = 600, H = 220, pad = 30;
+  if (!pos.length || !s.spot) {
+    svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" fill="#93a0b5" text-anchor="middle" font-size="14">Open a position to see its profit/loss curve</text>`;
+    $("payinfo").textContent = ""; return;
+  }
+  const span = Math.max((s.straddle || s.spot * 0.01) * 2.5, s.spot * 0.015);
+  const x0 = s.spot - span, x1 = s.spot + span, N = 121;
+  const pnlAt = x => pos.reduce((t, p) => {
+    const intrinsic = p.opt === "CE" ? Math.max(x - p.strike, 0) : Math.max(p.strike - x, 0);
+    return t + (intrinsic - p.avg) * p.qty;
+  }, 0);
+  const pts = Array.from({length: N}, (_, i) => { const x = x0 + (x1 - x0) * i / (N - 1); return [x, pnlAt(x)]; });
+  let y0 = Math.min(0, ...pts.map(p => p[1])), y1 = Math.max(0, ...pts.map(p => p[1]));
+  if (y1 - y0 < 1) { y0 -= 1; y1 += 1; }
+  const m = (y1 - y0) * 0.1; y0 -= m; y1 += m;
+  const X = x => pad + (x - x0) / (x1 - x0) * (W - 2 * pad), Y = y => H - pad - (y - y0) / (y1 - y0) * (H - 2 * pad);
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+  const zy = Y(0);
+  const area = `${line} L${X(x1)},${zy} L${X(x0)},${zy} Z`;
+  const bes = [];
+  for (let i = 1; i < N; i++) if ((pts[i - 1][1] < 0) !== (pts[i][1] < 0)) {
+    const [a, fa] = pts[i - 1], [b, fb] = pts[i]; bes.push(a + (b - a) * (-fa) / (fb - fa));
+  }
+  const tick = x => `<text x="${X(x)}" y="${H - 8}" fill="#93a0b5" font-size="11" text-anchor="middle">${Math.round(x)}</text>`;
+  svg.innerHTML = `
+    <defs><clipPath id="cpos"><rect x="0" y="0" width="${W}" height="${zy}"/></clipPath>
+      <clipPath id="cneg"><rect x="0" y="${zy}" width="${W}" height="${H - zy}"/></clipPath></defs>
+    <path d="${area}" fill="rgba(34,197,94,.18)" clip-path="url(#cpos)"/>
+    <path d="${area}" fill="rgba(240,82,82,.18)" clip-path="url(#cneg)"/>
+    <line x1="${pad}" x2="${W - pad}" y1="${zy}" y2="${zy}" stroke="#4b5568" stroke-dasharray="4 4"/>
+    <path d="${line}" fill="none" stroke="#e8ebf1" stroke-width="2"/>
+    <line x1="${X(s.spot)}" x2="${X(s.spot)}" y1="${pad - 10}" y2="${H - pad}" stroke="#f5b301" stroke-width="1.5"/>
+    <text x="${X(s.spot)}" y="${pad - 14}" fill="#f5b301" font-size="11" text-anchor="middle">now ${fmt(s.spot, 0)}</text>
+    ${bes.map(b => `<circle cx="${X(b)}" cy="${zy}" r="4" fill="#60a5fa"/><text x="${X(b)}" y="${zy - 8}" fill="#93c5fd" font-size="11" text-anchor="middle">${Math.round(b)}</text>`).join("")}
+    ${tick(x0)}${tick(s.spot - span / 2)}${tick(s.spot + span / 2)}${tick(x1)}
+    <text x="${pad}" y="${Y(y1) + 12}" fill="#86efac" font-size="11">${rs(Math.max(...pts.map(p => p[1])))}</text>
+    <text x="${pad}" y="${Y(y0) - 4}" fill="#fca5a5" font-size="11">${rs(Math.min(...pts.map(p => p[1])))}</text>`;
+  const best = Math.max(...pts.map(p => p[1])), worst = Math.min(...pts.map(p => p[1]));
+  $("payinfo").textContent = `range ${fmt(x0, 0)}–${fmt(x1, 0)}`;
+  $("paynote").innerHTML = `At expiry, in this range: best ${rs(best)}, worst ${rs(worst)}` +
+    (bes.length ? ` · breakeven at ${bes.map(b => fmt(b, 0)).join(" and ")}` : "") +
+    `. Blue dots = breakeven, orange line = index now. Before expiry, real P&L also depends on time and volatility; stop-losses usually close positions before the worst case. Charges not included.`;
+}
+
+/* ---------- logs ---------- */
 function renderLogs(s) {
-  $("closed").innerHTML = s.closed.map(t => `<tr><td class="l num">${t.time}</td><td class="l">${t.symbol}</td><td class="num">${t.qty}</td>
-    <td class="num">${fmt(t.entry)}</td><td class="num">${fmt(t.exit)}</td><td class="num ${cls(t.net)}">${fmt(t.net)}</td>
-    <td class="l muted">${t.why}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">None yet</td></tr>`;
-  $("msgs").innerHTML = s.messages.map(m => `<div class="msg ${m.level}"><span class="muted num">${m.time}</span> ${m.text}</div>`).join("")
+  $("closed").innerHTML = s.closed.map(t => `<tr><td class="l num">${t.time}</td><td class="l">${esc(t.symbol)}</td><td class="num">${t.qty}</td>
+    <td class="num w">${fmt(t.entry)}</td><td class="num w">${fmt(t.exit)}</td><td class="num ${cls(t.net)}">${rs(t.net)}</td>
+    <td class="l muted">${esc(t.why)}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">None yet</td></tr>`;
+  $("msgs").innerHTML = s.messages.map(m => `<div class="msg ${m.level}"><span class="muted num">${m.time}</span> ${esc(m.text).replace(/Rs/g, "₹")}</div>`).join("")
     || `<div class="empty">Activity will show here</div>`;
 }
 
 async function refresh() {
   try {
     const s = await (await fetch("/api/state")).json();
-    S = s; renderHeader(s); renderChain(s); renderPositions(s); renderLogs(s);
+    S = s; renderHeader(s); renderMarket(s); renderRisk(s); renderChain(s); renderPositions(s); renderPayoff(s); renderLogs(s);
   } catch (e) { $("clock").textContent = "disconnected"; }
 }
 
@@ -268,10 +516,10 @@ $("und").onchange = e => post("/api/view", {underlying: e.target.value});
 $("exp").onchange = e => post("/api/view", {expiry: e.target.value});
 $("r_sl").oninput = $("r_tg").oninput = () => rulesTouched = true;
 $("saverules").onclick = async () => {
-  await post("/api/rules", {mtm_stop_loss: parseFloat($("r_sl").value) || 0, mtm_target: parseFloat($("r_tg").value) || 0});
+  await post("/api/rules", {mtm_stop_loss: parseFloat($("r_sl").value) || 0, mtm_target: parseFloat($("r_tg").value) || 0}, true);
   rulesTouched = false; toast("Rules saved", true);
 };
-$("exitall").onclick = () => { if (confirm("Exit ALL positions now?")) post("/api/exit_all"); };
+$("exitall").onclick = () => { if (confirm("Close ALL open positions now?")) post("/api/exit_all"); };
 $("lots").oninput = () => S && renderHeader(S);
 refresh(); setInterval(refresh, 1000);
 </script>

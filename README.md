@@ -149,10 +149,17 @@ Opens `http://127.0.0.1:8050` (only reachable from your own PC). Settings: `conf
 
 ![Option terminal](docs/terminal.png)
 
-- **Top bar:** index and expiry, spot, change, high/low, synthetic future, ATM straddle, MTM (booked + open, margin used).
-- **Option chain:** OI, IV and LTP for calls and puts, **B / S** buttons per strike, ATM row highlighted, a Lots box.
-- **Positions:** quantity, average, LTP, stop-loss, P&L; **+lots**, exit **¼ / ½ / all**, and **Move to** another strike.
-- **Rules:** MTM stop-loss and target exit everything and stop new trades for the day; **EXIT ALL** button.
+- **Market today** in plain words: expected move by expiry, support and resistance from open interest, put/call ratio,
+  max pain, time left.
+- **Your safety limits** as meters: loss used vs the daily limit, margin blocked, trades used; auto-exit rules and EXIT ALL.
+- **Option chain** labelled "CALLS gain if price rises / PUTS gain if price falls", with OI bars, change vs yesterday,
+  ATM and in-the-money shading, and an orange line where the price is.
+- **Order ticket** before every trade: what you pay or receive, margin, stop-loss, loss if the stop hits, breakeven,
+  charges, and the risk agent's decision (with the maximum lots allowed). "Fast mode" skips it.
+- **Positions in plain language** ("Sold put: gains if NIFTY stays above 22,850"), with close ¼ / ½ / all and shift to strike.
+- **Profit/loss at expiry chart** for your open positions, with breakevens. The **?** button explains every term.
+
+![Order ticket](docs/terminal_ticket.png)
 
 Safety, the same as the strategy bot:
 - Every new position and every add goes through the **risk agent**: 1% risk per position counting lots already held,
