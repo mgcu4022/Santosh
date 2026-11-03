@@ -66,7 +66,7 @@ def _print_result(res, out: Path | None):
         res.trades.to_csv(out / "trades.csv", index=False)
         res.journal.to_csv(out / "journal.csv", index=False)
         res.equity.rename("equity").to_csv(out / "equity.csv")
-        (out / "summary.json").write_text(json.dumps(res.summary, indent=2, default=str))
+        (out / "summary.json").write_text(json.dumps(res.summary, indent=2, default=str), encoding="utf-8")
         print(f"\nSaved trades, journal, equity curve to {out}/")
 
 
@@ -80,7 +80,7 @@ def load_dotenv(path: str = ".env") -> None:
     f = Path(path)
     if not f.exists():
         return
-    for line in f.read_text().splitlines():
+    for line in f.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -92,6 +92,11 @@ def load_dotenv(path: str = ".env") -> None:
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):   # Windows consoles/logs: print ✅ and ₹ without crashing
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     load_dotenv()
     p = argparse.ArgumentParser(prog="tradebot", description="Indian market trading agents (backtest + paper)")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -218,7 +223,7 @@ def main(argv=None):
         from .deals import fetch_deals, parse_deals, summarize
         if args.file:
             kind = "block" if "block" in Path(args.file).name.lower() else "bulk"
-            deals = parse_deals(Path(args.file).read_text(), kind)
+            deals = parse_deals(Path(args.file).read_text(encoding="utf-8"), kind)
         else:
             deals = fetch_deals()
         if args.symbol:
@@ -312,7 +317,7 @@ def main(argv=None):
             n.send(short_summary(res))
             n.close()
         out = Path(args.out or Path(args.runs) / f"report_{args.prefix}.md")
-        out.write_text(text)
+        out.write_text(text, encoding="utf-8")
         print(f"Saved to {out}")
     elif args.cmd == "terminal":
         _terminal(args)
@@ -409,7 +414,7 @@ def _scan(args):
     cols = ["score", "bias", "setups", "close", "chg_pct", "gap_pct", "rel_vol", "atr_pct", "turnover_cr", "trend"]
     print(res[cols].to_string())
     if args.watchlist:
-        Path(args.watchlist).write_text(watchlist_yaml(res, args.strategy) + "\n")
+        Path(args.watchlist).write_text(watchlist_yaml(res, args.strategy) + "\n", encoding="utf-8")
         print(f"\nWatchlist written to {args.watchlist}")
 
 

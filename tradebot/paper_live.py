@@ -182,7 +182,7 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
     (run / "meta.json").write_text(json.dumps({
         "capital": cfg.get("capital", 500_000), "started": datetime.now(IST).isoformat(),
         "symbols": symbols, "strategies": {i["symbol"]: i["strategy"]["name"] for i in cfg["instruments"]},
-    }, indent=2))
+    }, indent=2), encoding="utf-8")
     stop_file = run / "STOP"
     log.info("Paper trading started. Kill switch: touch %s", stop_file)
     if context is not None and context.banned:

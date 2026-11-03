@@ -75,7 +75,7 @@ def run_checks(cfg: dict, online: bool = True, now: datetime | None = None) -> l
     try:
         Path("runs").mkdir(exist_ok=True)
         probe = Path("runs") / ".write_test"
-        probe.write_text("ok")
+        probe.write_text("ok", encoding="utf-8")
         probe.unlink()
         add(OK, "Results folder", "runs/ is writable")
     except OSError as e:

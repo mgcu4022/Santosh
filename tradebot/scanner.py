@@ -36,7 +36,7 @@ class ScanConfig:
 
 def load_universe(path: str) -> list[str]:
     syms = []
-    for line in Path(path).read_text().splitlines():
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
         line = line.split("#")[0].strip()
         if line:
             syms.append(line.upper())

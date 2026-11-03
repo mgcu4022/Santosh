@@ -340,7 +340,7 @@ class OptionTerminal:
                 n += 1
                 run = base.with_name(f"{base.name}_{n}")
             run.mkdir(parents=True, exist_ok=True)
-            (run / "meta.json").write_text(f'{{"capital": {self.cfg.capital}}}')
+            (run / "meta.json").write_text(f'{{"capital": {self.cfg.capital}}}', encoding="utf-8")
             self.run_dir = run
         pd.DataFrame(self.journal).to_csv(self.run_dir / "journal.csv", index=False)
         pd.DataFrame([{**t.__dict__, "net_pnl": t.net_pnl} for t in self.broker.trades]).to_csv(

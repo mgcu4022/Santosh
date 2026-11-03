@@ -44,7 +44,7 @@ def load_runs(runs_dir: str = "runs", start: str | None = None, end: str | None 
         days.add(day)
         meta = d / "meta.json"
         if meta.exists() and capital is None:
-            capital = float(json.loads(meta.read_text()).get("capital", 0)) or None
+            capital = float(json.loads(meta.read_text(encoding="utf-8")).get("capital", 0)) or None
         for name, bucket in (("trades.csv", trades), ("journal.csv", journals)):
             f = d / name
             if f.exists() and f.stat().st_size > 1:
