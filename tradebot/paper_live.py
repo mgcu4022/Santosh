@@ -236,3 +236,25 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
 def _save(desk, run: Path) -> None:
     pd.DataFrame(desk.journal).to_csv(run / "journal.csv", index=False)
     pd.DataFrame([{**t.__dict__, "net_pnl": t.net_pnl} for t in desk.broker.trades]).to_csv(run / "trades.csv", index=False)
+    (run / "state.json").write_text(json.dumps(snapshot(desk), indent=2, default=str), encoding="utf-8")
+
+
+def snapshot(desk) -> dict:
+    """Live state for `python -m tradebot live` (and Claude's /trader-live)."""
+    b, r = desk.broker, desk.risk
+    positions = []
+    for p in b.open_positions():
+        px = b.last_price.get(p.instrument.symbol, p.avg_price)
+        positions.append({"symbol": p.instrument.symbol, "segment": p.instrument.segment.value,
+                          "side": "LONG" if p.qty > 0 else "SHORT", "qty": p.qty, "avg": round(p.avg_price, 2),
+                          "ltp": px, "stop": p.stop_loss, "target": p.target, "strategy": p.strategy,
+                          "pnl": round(p.unrealized(px), 2), "entry_time": p.entry_time})
+    realized = round(sum(t.net_pnl for t in b.trades), 2)
+    return {"updated": datetime.now(IST).isoformat(timespec="seconds"), "equity": round(b.equity(), 2),
+            "capital": r.cfg.capital, "mtm": round(b.equity() - r.day_start_equity, 2), "realized": realized,
+            "daily_loss_limit": round(r.day_start_equity * r.cfg.max_daily_loss_pct / 100, 0),
+            "halted": r.halted, "halt_reason": r.halt_reason, "trades_today": r.trades_today,
+            "max_trades": r.cfg.max_trades_per_day, "positions": positions,
+            "closed": [{"symbol": t.symbol, "side": t.side, "net_pnl": round(t.net_pnl, 2), "why": t.exit_reason,
+                        "exit_time": t.exit_time} for t in b.trades[-10:]],
+            "recent_events": [{k: v for k, v in e.items()} for e in desk.journal[-12:]]}

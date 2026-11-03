@@ -46,8 +46,17 @@ so Claude explains the numbers instead of guessing them.
 | `/trader-backtest` | Time machine: replay past periods, honest read of results | `backtest` |
 | `/trader-paper` | Run paper trading with Telegram alerts and kill switch | `paper` |
 | `/trader-journal` | Review the day: P&L after charges, blocks, vetoes, one improvement | reads `runs/` |
+| `/trader-live` | Real-time assistant during market hours: your positions, MTM, limits, warnings, explained | `live` |
 
-### Why 6 skills and not 11
+### Real-time assistant (`/trader-live`)
+
+While the option terminal or the strategy bot is running, open this folder in Claude Code (included in Claude Pro)
+and ask *"how are my trades?"* or type `/trader-live`. Claude runs `python -m tradebot live`, which reads your live
+positions, MTM, safety-limit usage and market summary, and flags risks in code (stop-loss close, short option at its
+strike, daily loss limit nearly used, expiry-day decay, price at support/resistance). Claude explains them in plain
+words. It is **read-only**: it never places or closes trades unless you explicitly ask for that exact action.
+
+### Why these skills and not 11
 
 This was inspired by an open-source US "day-trader" skill pack with 11 skills, adapted for India
 rather than copied:

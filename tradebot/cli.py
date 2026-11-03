@@ -18,6 +18,7 @@
   report                    multi-day paper-trading report and verdict
   preflight -c CONFIG       pre-market checklist (config, keys, calendar, data access)
   terminal [--demo]         option-trading screen in the browser (paper orders)
+  live [--json]             live snapshot of the terminal and strategy bot, with risk warnings
   alert-test                send a test Telegram alert
   doctor                    check which keys/tokens are set
 """
@@ -174,6 +175,10 @@ def main(argv=None):
     tm.add_argument("--login", action="store_true", help="open the daily Upstox login first")
     tm.add_argument("--port", type=int, default=8050)
     tm.add_argument("--no-browser", action="store_true")
+    lv = sub.add_parser("live")
+    lv.add_argument("--port", type=int, default=8050, help="option terminal port")
+    lv.add_argument("--runs", default="runs")
+    lv.add_argument("--json", action="store_true", help="raw data instead of the text summary")
     pf = sub.add_parser("preflight")
     pf.add_argument("-c", "--config", default="config/my.yaml")
     pf.add_argument("--offline", action="store_true", help="skip the network checks")
@@ -321,6 +326,16 @@ def main(argv=None):
         print(f"Saved to {out}")
     elif args.cmd == "terminal":
         _terminal(args)
+    elif args.cmd == "live":
+        from .live import fetch_terminal, latest_paper_state, paper_warnings, render, terminal_warnings
+        term = fetch_terminal(args.port)
+        paper, pdir = latest_paper_state(args.runs)
+        if args.json:
+            print(json.dumps({"terminal": term, "terminal_warnings": terminal_warnings(term) if term else [],
+                              "strategy_bot": paper, "strategy_bot_warnings": paper_warnings(paper) if paper else []},
+                             indent=2, default=str))
+        else:
+            print(render(term, paper, pdir))
     elif args.cmd == "preflight":
         from .preflight import print_checks, run_checks
         return print_checks(run_checks(load_config(args.config), online=not args.offline))

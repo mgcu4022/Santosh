@@ -107,6 +107,7 @@ listed in the config are skipped automatically.
 | `paper -c CFG [--login]` | Live paper trading loop | Upstox |
 | `terminal [--demo\|--login] [--port N]` | Option terminal in the browser | Upstox (live) |
 | `preflight -c CFG [--offline]` | Pre-market checklist | — |
+| `live [--json] [--port N]` | Live snapshot of terminal + strategy bot with risk warnings (read-only) | something running |
 | `report [--prefix paper\|terminal]` | Multi-day results and verdict | saved runs |
 | `plan SYMBOL BUY ENTRY STOP [--segment FUT --lot 65 ...]` | Size one trade: qty, risk, charges, breakeven | nothing |
 | `scan [--nse\|--google-url URL\|--csv-dir DIR]` | Rank NIFTY 50 stocks for a watchlist | Yahoo/NSE/Google |
@@ -118,7 +119,10 @@ listed in the config are skipped automatically.
 | `alert-test`, `doctor` | Telegram test; which keys are set | — |
 
 Claude Code skills in `.claude/skills/`: `/trader-scan`, `/trader-research`, `/trader-plan`,
-`/trader-backtest`, `/trader-paper`, `/trader-journal`. Use them when the request matches.
+`/trader-backtest`, `/trader-paper`, `/trader-journal`, `/trader-live`. Use them when the request matches.
+During market hours, questions like "how are my trades doing?" mean `/trader-live`: run `python -m tradebot live`
+first and answer from its numbers. That skill is read-only: never place/close/modify positions or create the
+STOP file unless the user explicitly asks for that exact action.
 
 ## 7. Config files (`config/`)
 
