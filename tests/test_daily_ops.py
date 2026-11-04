@@ -173,3 +173,13 @@ def test_saved_analytics_token_skips_login(monkeypatch):
     monkeypatch.delenv("UPSTOX_ACCESS_TOKEN")
     monkeypatch.setattr(ua, "token_from_keyring", lambda: None)
     assert ua.get_token(login=False) is None
+
+
+@pytest.mark.parametrize("argv", [["-v", "doctor"], ["doctor", "-v"]])
+def test_verbose_flag_works_before_or_after_command(monkeypatch, argv):
+    import logging
+    import tradebot.cli as c
+    seen = {}
+    monkeypatch.setattr(logging, "basicConfig", lambda **kw: seen.update(kw))
+    assert c.main(argv) == 0
+    assert seen["level"] == logging.INFO
