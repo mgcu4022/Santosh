@@ -1,0 +1,43 @@
+# 10-day paper trial before investing Rs 20,000 (5 Nov - 19 Nov 2026).
+# The instruments list is written by:
+#   python -m tradebot scan --nse --all --max-price 200 --write-config config/trial_20k.yaml
+# Then run:  python -m tradebot paper -c config/trial_20k.yaml -v
+#
+# Same rules every day for all 10 days: changing rules mid-trial spoils the comparison.
+
+capital: 20000              # what you plan to invest
+live_data: kotak            # Kotak Neo quotes -> 5-min candles (switch to upstox once it is active)
+broker: kotak               # brokerage plan used for paper charges: kotak (Rs10/0.05%) or upstox (Rs20/0.1%)
+runs_dir: runs/trial20k     # trial results kept apart from other paper runs
+timeframe: {unit: minutes, interval: 5}
+slippage_bps: 5             # cheaper stocks have wider spreads: be pessimistic
+
+risk:
+  risk_per_trade_pct: 1.0   # Rs 200 max loss per trade at the stop
+  max_position_pct: 50      # max margin per position: Rs 10,000 (intraday margin ~20% -> up to ~Rs 50,000 of stock)
+  max_open_positions: 2
+  max_daily_loss_pct: 3.0   # stop for the day at -Rs 600
+  max_trades_per_day: 4     # charges add up fast on a small account
+  no_entry_before: "09:30"
+  no_entry_after: "14:30"
+  square_off_time: "15:15"
+  margin: {eq_intraday: 0.20}
+
+context:
+  enabled: true             # skip a stock on its results / board-meeting day; news for the AI analyst
+  ban_list: true
+  events: true
+  block_on_results_day: true
+  news: true
+
+analyst:
+  enabled: false
+
+alerts:
+  console: true
+  telegram: false
+
+holidays:
+  - 2026-11-09              # Diwali Balipratipada
+  - 2026-11-24              # Guru Nanak Jayanti
+  - 2026-12-25              # Christmas

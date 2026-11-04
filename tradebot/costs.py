@@ -41,6 +41,22 @@ DEFAULT_RATES: dict[str, dict[str, float]] = {
         "dp_charge_sell": 0.0,
     },
 }
+# Broker brokerage plans (only brokerage differs; taxes and exchange fees are the same everywhere).
+# Sources (Nov 2026, verify on the broker's rate card): Upstox charges list; Kotak Neo Trade Free plan.
+BROKER_PRESETS: dict[str, dict[str, dict[str, float]]] = {
+    "upstox": {   # Rs 20 or 0.1% per intraday order (lower); Rs 20 per F&O order; Rs 20 per delivery order
+        "eq_intraday": {"brokerage_flat": 20.0, "brokerage_pct": 0.001},
+        "eq_delivery": {"brokerage_flat": 20.0, "brokerage_pct": 0.0},
+        "fut": {"brokerage_flat": 20.0, "brokerage_pct": 0.0},
+        "opt": {"brokerage_flat": 20.0, "brokerage_pct": 0.0},
+    },
+    "kotak": {    # Kotak Neo Trade Free (Youth/Pro): Rs 10 or 0.05% per intraday order (lower); Rs 10 per F&O order
+        "eq_intraday": {"brokerage_flat": 10.0, "brokerage_pct": 0.0005},
+        "fut": {"brokerage_flat": 10.0, "brokerage_pct": 0.0},
+        "opt": {"brokerage_flat": 10.0, "brokerage_pct": 0.0},
+    },
+}
+
 SEBI_FEE = 0.000001   # Rs 10 per crore
 GST = 0.18            # on brokerage + exchange + SEBI fee
 
@@ -56,6 +72,19 @@ def rate_key(segment: Segment, product: Product) -> str:
 @dataclass
 class ChargeModel:
     overrides: dict[str, dict[str, float]] = field(default_factory=dict)
+
+    @classmethod
+    def for_broker(cls, broker: str | None, overrides: dict | None = None) -> "ChargeModel":
+        """Preset for a broker ("kotak", "upstox"), with optional config overrides on top."""
+        merged: dict[str, dict[str, float]] = {}
+        if broker:
+            if broker.lower() not in BROKER_PRESETS:
+                raise ValueError(f"Unknown broker '{broker}'. Known: {', '.join(BROKER_PRESETS)}")
+            for k, v in BROKER_PRESETS[broker.lower()].items():
+                merged[k] = dict(v)
+        for k, v in (overrides or {}).items():
+            merged.setdefault(k, {}).update(v)
+        return cls(merged)
 
     def rates(self, key: str) -> dict[str, float]:
         r = dict(DEFAULT_RATES[key])

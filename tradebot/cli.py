@@ -17,6 +17,7 @@
   upstox-login              daily Upstox browser login (prints/stores today's token)
   report                    multi-day paper-trading report and verdict
   preflight -c CONFIG       pre-market checklist (config, keys, calendar, data access)
+  datacheck -c CONFIG       compare Kotak / Upstox / Yahoo live prices: uptime, speed, agreement
   terminal [--demo]         option-trading screen in the browser (paper orders)
   live [--json]             live snapshot of the terminal and strategy bot, with risk warnings
   alert-test                send a test Telegram alert
@@ -128,6 +129,13 @@ def main(argv=None):
     sc.add_argument("--csv-dir", default=None, help="read daily CSVs (SYMBOL.csv) instead of Yahoo")
     sc.add_argument("--google-url", default=None, help="published Google Sheet (GOOGLEFINANCE) instead of Yahoo")
     sc.add_argument("--nse", action="store_true", help="official NSE bhavcopy data instead of Yahoo")
+    sc.add_argument("--all", action="store_true", help="with --nse: scan every EQ-series NSE stock, not just the universe")
+    sc.add_argument("--min-price", type=float, default=None, help="default 50 (20 when --max-price is set)")
+    sc.add_argument("--max-price", type=float, default=None, help="e.g. 200 for a small account")
+    sc.add_argument("--min-turnover", type=float, default=None, help="Rs crore/day (default 10; 25 with --max-price)")
+    sc.add_argument("--write-config", default=None, help="write a ready config: base file + these stocks")
+    sc.add_argument("--base", default="config/trial_20k_base.yaml", help="base settings for --write-config")
+    sc.add_argument("--no-kotak", action="store_true", help="don't look up Kotak tokens")
     sc.add_argument("--watchlist", default=None, help="write a paper-trading instruments block to this file")
     sc.add_argument("--strategy", default="orb")
     dl = sub.add_parser("deals", parents=[common])
@@ -183,6 +191,10 @@ def main(argv=None):
     lv.add_argument("--port", type=int, default=8050, help="option terminal port")
     lv.add_argument("--runs", default="runs")
     lv.add_argument("--json", action="store_true", help="raw data instead of the text summary")
+    dc = sub.add_parser("datacheck", parents=[common])
+    dc.add_argument("-c", "--config", default="config/trial_20k.yaml")
+    dc.add_argument("--minutes", type=float, default=2.0)
+    dc.add_argument("--every", type=float, default=10.0, help="seconds between rounds")
     pf = sub.add_parser("preflight", parents=[common])
     pf.add_argument("-c", "--config", default="config/my.yaml")
     pf.add_argument("--offline", action="store_true", help="skip the network checks")
@@ -325,7 +337,7 @@ def main(argv=None):
         if not rd.days:
             print(f"No paper runs found in {args.runs}/ yet.")
             return 0
-        res = compute(rd)
+        res = compute(rd, segment="OPT" if args.prefix == "terminal" else "EQ")
         text = render(res)
         print(text)
         if args.telegram:
@@ -349,6 +361,19 @@ def main(argv=None):
                              indent=2, default=str))
         else:
             print(render(term, paper, pdir))
+    elif args.cmd == "datacheck":
+        from .datacheck import build_sources, run_rounds, save, summarize
+        cfg = load_config(args.config)
+        built = build_sources(parse_instruments(cfg))
+        for name, why in built["skipped"].items():
+            print(f"  {name}: not tested ({why})")
+        rounds = max(1, int(args.minutes * 60 // args.every) + 1)
+        print(f"Checking {', '.join(built['sources'])} for {args.minutes:g} min ({rounds} rounds)...")
+        df = run_rounds(built["sources"], rounds, args.every)
+        print(summarize(df).to_string())
+        print("\nrounds_ok_% = answered with prices; avg_ms = response time; gap_bps = difference from the "
+              "median price of all sources (1 bps = 0.01%). Yahoo is often delayed, so its gap is expected to be larger.")
+        print(f"Saved to {save(df, cfg.get('runs_dir', 'runs'))}")
     elif args.cmd == "preflight":
         from .preflight import print_checks, run_checks
         return print_checks(run_checks(load_config(args.config), online=not args.offline))
@@ -396,12 +421,16 @@ def _terminal(args):
 
 
 def _scan(args):
+    from datetime import date as _date
     from .scanner import ScanConfig, load_universe, run_scan, watchlist_yaml
     syms = load_universe(args.universe)
-    data, failed = {}, []
+    data, failed, isin = {}, [], {}
     if args.nse:
         from .data.nse import NseClient
-        bhav = NseClient().daily_history(150)
+        bhav, meta = NseClient().daily_history_with_meta(150)
+        isin = {k: v.get("isin", "") for k, v in meta.items()}
+        if args.all:   # every EQ-series stock (BE = trade-to-trade: no intraday)
+            syms = [k for k, v in meta.items() if str(v.get("series", "EQ")) == "EQ"]
         for s in syms:
             if s in bhav:
                 data[s] = bhav[s]
@@ -432,8 +461,14 @@ def _scan(args):
             except Exception as e:
                 failed.append(s)
                 logging.info("%s: %s", s, e)
-    res = run_scan(data, ScanConfig(top=args.top))
-    print(f"Scanned {len(data)} stocks" + (f" ({len(failed)} failed: {', '.join(failed[:8])})" if failed else ""))
+    small = args.max_price is not None
+    cfg = ScanConfig(top=args.top, max_price=args.max_price,
+                     min_price=args.min_price if args.min_price is not None else (20.0 if small else 50.0),
+                     min_turnover_cr=args.min_turnover if args.min_turnover is not None else (25.0 if small else 10.0))
+    res = run_scan(data, cfg)
+    print(f"Scanned {len(data)} stocks" + (f" ({len(failed)} failed: {', '.join(failed[:8])})" if failed and not args.all else ""))
+    rule = f"price Rs {cfg.min_price:g}-{cfg.max_price:g}" if small else f"price >= Rs {cfg.min_price:g}"
+    print(f"Filters: {rule}, turnover >= Rs {cfg.min_turnover_cr:g} cr/day, daily range {cfg.min_atr_pct:g}-{cfg.max_atr_pct:g}%")
     if res.empty:
         print("Nothing passed the liquidity/volatility filters.")
         return
@@ -442,7 +477,21 @@ def _scan(args):
     if args.watchlist:
         Path(args.watchlist).write_text(watchlist_yaml(res, args.strategy) + "\n", encoding="utf-8")
         print(f"\nWatchlist written to {args.watchlist}")
-
+    if args.write_config:
+        from .watchlist import instruments_yaml, write_config
+        tokens: dict[str, str] = {}
+        if not args.no_kotak:
+            try:
+                from .data.kotak import KotakNeoQuotes
+                tokens = KotakNeoQuotes().tokens_for(list(res.index))
+            except Exception as e:
+                print(f"Kotak token lookup failed ({e}); fill them with: python -m tradebot kotak-find SYMBOL")
+        out = write_config(args.base, args.write_config, instruments_yaml(res, isin, tokens),
+                           header=f"Stocks picked by the scanner on {_date.today():%d %b %Y} ({rule}). Re-run scan to refresh.")
+        missing = [s for s in res.index if s not in tokens]
+        print(f"\nConfig written to {out} with {len(res)} stocks" +
+              (f"; Kotak token missing for: {', '.join(missing)}" if missing else "; all Kotak tokens found"))
+        print("Next: python -m tradebot kotak-test -c " + str(out))
 
 if __name__ == "__main__":
     sys.exit(main())

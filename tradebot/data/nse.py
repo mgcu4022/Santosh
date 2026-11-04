@@ -61,8 +61,22 @@ def parse_bhavcopy(raw: bytes) -> pd.DataFrame:
         "open": df["OpnPric"], "high": df["HghPric"], "low": df["LwPric"], "close": df["ClsPric"],
         "volume": df["TtlTradgVol"],
         "name": df.get("FinInstrmNm", pd.Series([""] * len(df), index=df.index)),
+        "series": df["SctySrs"].astype(str).str.strip() if "SctySrs" in df.columns else "EQ",
+        "isin": df["ISIN"].astype(str).str.strip() if "ISIN" in df.columns else "",
     })
     return out.reset_index(drop=True)
+
+
+def bhav_meta(frames: list[pd.DataFrame]) -> dict[str, dict]:
+    """Latest series ('EQ' can be traded intraday; 'BE' is trade-to-trade, delivery only), ISIN and name."""
+    meta: dict[str, dict] = {}
+    for f in sorted([f for f in frames if len(f)], key=lambda f: f["date"].iloc[0]):
+        cols = f.columns
+        for row in f.itertuples(index=False):
+            meta[row.symbol] = {"series": getattr(row, "series", "EQ") if "series" in cols else "EQ",
+                                "isin": getattr(row, "isin", "") if "isin" in cols else "",
+                                "name": getattr(row, "name", "")}
+    return meta
 
 
 def bhav_to_daily(frames: list[pd.DataFrame]) -> dict[str, pd.DataFrame]:
@@ -176,9 +190,12 @@ class NseClient:
 
     def daily_history(self, days: int = 120, end: date | None = None) -> dict[str, pd.DataFrame]:
         """Daily candles for every NSE equity from the last `days` calendar days of bhavcopies."""
+        return self.daily_history_with_meta(days, end)[0]
+
+    def daily_history_with_meta(self, days: int = 120, end: date | None = None):
         end = end or date.today()
         frames = [f for f in (self.bhavcopy(end - timedelta(days=k)) for k in range(days)) if f is not None]
-        return bhav_to_daily(frames)
+        return bhav_to_daily(frames), bhav_meta(frames)
 
     # Ban list & events -----------------------------------------------------
     def ban_list(self) -> set[str]:

@@ -1,0 +1,36 @@
+# Liquid NSE stocks that often trade below Rs 200 (prices change: the scanner checks today's price).
+# Used when NSE data is unreachable:  python -m tradebot scan --universe config/universe_under200.txt --max-price 200
+TATASTEEL
+IOC
+NHPC
+PNB
+IDFCFIRSTB
+IRFC
+SUZLON
+YESBANK
+NMDC
+GAIL
+CANBK
+UNIONBANK
+BANKINDIA
+ASHOKLEY
+SAIL
+NBCC
+SJVN
+IREDA
+HUDCO
+IDEA
+BANDHANBNK
+MOTHERSON
+IRB
+GMRAIRPORT
+CENTRALBK
+IOB
+UCOBANK
+MAHABANK
+NATIONALUM
+BHEL
+FEDERALBNK
+BANKBARODA
+ONGC
+WIPRO

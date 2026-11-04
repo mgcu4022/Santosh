@@ -165,6 +165,7 @@ def run_dir_for_today(out_dir: str, now: datetime) -> Path:
 
 def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_days: int = 10,
               login: bool = False, login_timeout_min: float = 10) -> None:
+    out_dir = cfg.get("runs_dir", out_dir)           # e.g. runs/trial20k keeps a trial's results separate
     holidays = {str(h) for h in cfg.get("holidays", [])}
     if not is_trading_day(datetime.now(IST).date(), holidays):
         log.warning("Not a trading day (weekend or holiday in config). Exiting.")

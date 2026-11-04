@@ -29,7 +29,7 @@ def fetch_terminal(port: int = 8050, timeout: float = 3.0) -> dict | None:
 
 def latest_paper_state(runs_dir: str = "runs", today: str | None = None) -> tuple[dict | None, Path | None]:
     today = today or datetime.now(IST).strftime("%Y%m%d")
-    folders = sorted(Path(runs_dir).glob(f"paper_{today}*"), key=lambda p: p.stat().st_mtime)
+    folders = sorted(Path(runs_dir).glob(f"**/paper_{today}*"), key=lambda p: p.stat().st_mtime)   # incl. runs/trial20k
     for d in reversed(folders):
         f = d / "state.json"
         if f.exists():

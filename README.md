@@ -81,6 +81,35 @@ python -m tradebot backtest -c config/daily_yahoo.yaml   # free daily backtest
 The demo uses **random synthetic prices**, so it should lose about what it pays in charges.
 That's the expected result: on random data no strategy has an edge.
 
+## 10-day ₹20,000 trial (stocks under ₹200)
+
+Paper-trade exactly what you plan to invest, on liquid stocks priced ₹20–200, and compare brokers before
+any real money. Settings: `config/trial_20k_base.yaml` (₹200 max risk per trade, 2 positions, 4 trades/day,
+stop for the day at −₹600, Kotak prices and Kotak Trade Free brokerage). Results go to `runs/trial20k/`.
+
+```bash
+# 1. Pick today's stocks (official NSE data, every EQ-series stock, ₹20–200, ≥ ₹25 cr/day traded)
+python -m tradebot scan --nse --all --max-price 200 --top 6 --write-config config/trial_20k.yaml
+# 2. Check Kotak prices for them, then the checklist
+python -m tradebot kotak-test -c config/trial_20k.yaml
+python -m tradebot preflight -c config/trial_20k.yaml
+# 3. Run the day
+python -m tradebot paper -c config/trial_20k.yaml -v
+# 4. During the day (2-3 min): compare live data sources (Kotak / Upstox / Yahoo)
+python -m tradebot datacheck -c config/trial_20k.yaml --minutes 3
+# 5. After the close
+python -m tradebot report --runs runs/trial20k
+```
+
+The report includes **"Same trades, different broker"**: your trades re-priced with Kotak (₹10 or 0.05% per
+order) and Upstox (₹20 or 0.1%) brokerage. `datacheck` logs to `runs/trial20k/datacheck.csv` (uptime,
+response time, price agreement), so after 10 days you can see which feed was more reliable. If NSE data is
+unreachable, scan `--universe config/universe_under200.txt --max-price 200` (Yahoo) instead.
+
+Honest limits: 10 days gives roughly 10–40 trades, which is not enough to prove an edge (the report will say
+"NOT ENOUGH DATA"). Treat the trial as a check that everything works and what charges cost, and keep the
+first real money small, with the same rules.
+
 ## Running the 2–3 month paper test
 
 **One-time setup (about 30 minutes, on your PC):**

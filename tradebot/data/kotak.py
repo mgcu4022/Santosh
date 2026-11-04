@@ -53,6 +53,33 @@ def parse_quotes(resp) -> dict[str, float]:
     return out
 
 
+def match_tokens(df, symbols: list[str]) -> dict[str, str]:
+    """Find each symbol's token in Kotak's scrip master (column names vary a little between versions)."""
+    cols = {c.lower(): c for c in df.columns}
+    pick = lambda *names: next((cols[n] for n in names if n in cols), None)
+    tok_c = pick("psymbol", "ptoken", "token", "instrument_token", "exchange_token")
+    trd_c = pick("ptrdsymbol", "trading_symbol", "tradingsymbol")
+    name_c = pick("psymbolname", "symbol_name", "symbol")
+    grp_c = pick("pgroup", "series", "pseries")
+    if tok_c is None or (trd_c is None and name_c is None):
+        raise KotakError(f"Unrecognised scrip master columns: {list(df.columns)[:15]}")
+    out: dict[str, str] = {}
+    trd = df[trd_c].astype(str).str.upper().str.strip() if trd_c else None
+    name = df[name_c].astype(str).str.upper().str.strip() if name_c else None
+    grp = df[grp_c].astype(str).str.upper().str.strip() if grp_c else None
+    for sym in symbols:
+        s = sym.upper()
+        hit = df[trd == f"{s}-EQ"] if trd is not None else df.iloc[0:0]
+        if hit.empty and name is not None:
+            mask = name == s
+            if grp is not None:
+                mask &= grp.isin(["EQ", "NAN", ""])
+            hit = df[mask]
+        if not hit.empty:
+            out[sym] = str(hit.iloc[0][tok_c]).split(".")[0]
+    return out
+
+
 def scrip_url(resp, segment: str) -> str:
     """scrip_master() returns either the file URL or {"filesPaths": [...]}: pick this segment's CSV."""
     if isinstance(resp, str):
@@ -98,6 +125,14 @@ class KotakNeoQuotes:
             req = [{"instrument_token": str(t), "exchange_segment": seg} for t, seg in tokens[i:i + 50]]
             out.update(parse_quotes(self.client.quotes(instrument_tokens=req, quote_type="ltp")))
         return out
+
+    def scrip_master_df(self, segment: str = "nse_cm"):
+        import pandas as pd
+        return pd.read_csv(scrip_url(self.client.scrip_master(exchange_segment=segment), segment), low_memory=False)
+
+    def tokens_for(self, symbols: list[str], segment: str = "nse_cm") -> dict[str, str]:
+        """NSE symbol -> Kotak instrument token (cash segment, EQ series)."""
+        return match_tokens(self.scrip_master_df(segment), symbols)
 
     def find(self, symbol: str, segment: str = "nse_cm") -> list[dict]:
         """Search Kotak's scrip master for a symbol's token."""

@@ -79,7 +79,27 @@ def _group(t: pd.DataFrame, key, by_pnl: bool = True) -> pd.DataFrame:
     return out.sort_values("net_pnl", ascending=False) if by_pnl else out.sort_index()
 
 
-def compute(rd: RunData) -> dict:
+def broker_comparison(t: pd.DataFrame, segment: str = "EQ") -> pd.DataFrame:
+    """Re-price the same trades under each broker's brokerage plan (taxes/exchange fees unchanged)."""
+    from .costs import BROKER_PRESETS, ChargeModel
+    from .models import Product, Segment, Side
+    seg = Segment(segment)
+    rows = []
+    for name in BROKER_PRESETS:
+        cm = ChargeModel.for_broker(name)
+        ch = 0.0
+        for tr in t.itertuples():
+            entry_side = Side.BUY if tr.side == "LONG" else Side.SELL
+            ch += cm.order_charges(seg, Product.INTRADAY, entry_side, tr.entry_price, int(tr.qty))
+            ch += cm.order_charges(seg, Product.INTRADAY, entry_side.opposite(), tr.exit_price, int(tr.qty))
+        gross = float(t["gross_pnl"].sum())
+        rows.append({"broker": name, "charges": round(ch, 0), "net_pnl": round(gross - ch, 0),
+                     "charges_per_trade": round(ch / len(t), 1) if len(t) else 0.0,
+                     "charges_%_of_gross": round(ch / abs(gross) * 100, 1) if gross else None})
+    return pd.DataFrame(rows).set_index("broker").sort_values("net_pnl", ascending=False)
+
+
+def compute(rd: RunData, segment: str = "EQ") -> dict:
     t, j = rd.trades, rd.journal
     r: dict = {"days_run": len(rd.days), "first_day": rd.days[0] if rd.days else None,
                "last_day": rd.days[-1] if rd.days else None, "restarts": rd.folders - len(rd.days),
@@ -125,6 +145,7 @@ def compute(rd: RunData) -> dict:
     r["by_exit"] = _group(t, "exit_reason")
     r["by_entry_hour"] = _group(t, t["entry_time"].dt.strftime("%H:00").rename("entry_hour"), by_pnl=False)
     r["by_side"] = _group(t, "side")
+    r["by_broker"] = broker_comparison(t, segment)
     r["verdict"] = verdict(r)
     return r
 
@@ -181,6 +202,10 @@ def render(r: dict) -> str:
         for title, key in (("By strategy", "by_strategy"), ("By stock", "by_symbol"), ("By exit reason", "by_exit"),
                            ("By entry hour", "by_entry_hour"), ("Long vs short", "by_side")):
             L += ["", f"## {title}", "", _md_table(r[key])]
+    if r.get("trades") and "by_broker" in r:
+        L += ["", "## Same trades, different broker (brokerage plans only)", "", _md_table(r["by_broker"]),
+              "", "_Taxes and exchange fees are the same at every broker; only brokerage changes. "
+              "Check your plan on the broker's rate card._"]
     if r.get("blocked"):
         L += ["", "## Trades stopped by the safety gates", "",
               ", ".join(f"{k}: {v}" for k, v in r["blocked"].items())]

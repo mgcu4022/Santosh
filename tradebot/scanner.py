@@ -26,6 +26,7 @@ from .indicators import atr, ema
 @dataclass
 class ScanConfig:
     min_price: float = 50.0
+    max_price: float | None = None    # e.g. 200 for a small-capital account
     min_turnover_cr: float = 10.0     # 20-day avg traded value, Rs crore/day
     min_atr_pct: float = 1.0          # too quiet = no room for intraday moves
     max_atr_pct: float = 6.0          # too wild = stops get hit by noise
@@ -85,7 +86,7 @@ def scan_one(df: pd.DataFrame, cfg: ScanConfig) -> dict | None:
 
     # Liquidity / volatility filters
     reasons = []
-    if m["close"] < cfg.min_price:
+    if m["close"] < cfg.min_price or (cfg.max_price is not None and m["close"] > cfg.max_price):
         reasons.append("price")
     if turnover_cr < cfg.min_turnover_cr:
         reasons.append("illiquid")

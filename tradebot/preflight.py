@@ -34,7 +34,11 @@ def run_checks(cfg: dict, online: bool = True, now: datetime | None = None) -> l
         add(FAIL, "Config loads", str(e))
         return out
     missing = [s.instrument.symbol for s in specs if not s.data_key]
-    add(FAIL if missing else OK, "Instrument keys", f"missing for {', '.join(missing)}" if missing else "all set")
+    if str(cfg.get("live_data", "upstox")).lower() == "kotak":   # Kotak tokens are checked below instead
+        add(OK if not missing else WARN, "Upstox keys",
+            "all set" if not missing else f"missing for {', '.join(missing)} (fine: Kotak is the live source)")
+    else:
+        add(FAIL if missing else OK, "Instrument keys", f"missing for {', '.join(missing)}" if missing else "all set")
     tf = cfg.get("timeframe", {}).get("unit", "minutes")
     add(OK if tf == "minutes" else FAIL, "Timeframe", "5-min candles" if tf == "minutes" else "paper needs minute candles")
 

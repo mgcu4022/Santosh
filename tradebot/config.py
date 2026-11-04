@@ -63,7 +63,7 @@ def build_desk(cfg: dict, live_clock: bool = False, analyst_client=None,
                 raise ValueError(f"{s.instrument.symbol}: use product DELIVERY (equity) or NRML (F&O) with daily bars")
     risk_cfg = RiskConfig.from_dict(risk_d)
     risk = RiskManager(risk_cfg)
-    broker = PaperBroker(risk_cfg.capital, ChargeModel(cfg.get("charges", {}) or {}),
+    broker = PaperBroker(risk_cfg.capital, ChargeModel.for_broker(cfg.get("broker"), cfg.get("charges") or {}),
                          slippage_bps=cfg.get("slippage_bps", 2.0), margin_fn=risk.margin_fraction)
     books = []
     for s in specs:

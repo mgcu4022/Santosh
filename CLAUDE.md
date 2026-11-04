@@ -118,7 +118,8 @@ listed in the config are skipped automatically.
 | `live [--json] [--port N]` | Live snapshot of terminal + strategy bot with risk warnings (read-only) | something running |
 | `report [--prefix paper\|terminal]` | Multi-day results and verdict | saved runs |
 | `plan SYMBOL BUY ENTRY STOP [--segment FUT --lot 65 ...]` | Size one trade: qty, risk, charges, breakeven | nothing |
-| `scan [--nse\|--google-url URL\|--csv-dir DIR]` | Rank NIFTY 50 stocks for a watchlist | Yahoo/NSE/Google |
+| `scan [--nse [--all]\|--google-url URL\|--csv-dir DIR] [--max-price 200] [--write-config CFG]` | Rank stocks; `--all` = every EQ-series NSE stock; `--write-config` writes a ready config with Kotak tokens | Yahoo/NSE/Google |
+| `datacheck -c CFG [--minutes N]` | Compare Kotak / Upstox / Yahoo live prices (uptime, speed, agreement); appends to `<runs_dir>/datacheck.csv` | sources' keys |
 | `nse-bhav --days N` | Download official NSE end-of-day prices | NSE site |
 | `ban-list`, `events SYMBOL`, `deals [--symbol X]`, `news [SYMBOL]` | NSE ban list, results dates, bulk/block deals, RSS headlines | internet |
 | `upstox-login` | Daily Upstox login only | Upstox app keys |
@@ -134,6 +135,10 @@ STOP file unless the user explicitly asks for that exact action.
 
 ## 7. Config files (`config/`)
 
+- `trial_20k_base.yaml` → `trial_20k.yaml` (written by `scan --write-config`): the user's **10-day ₹20,000 trial**
+  (5–19 Nov 2026) on liquid stocks priced ₹20–200: ₹200 risk/trade, 2 positions, 4 trades/day, −₹600 daily stop,
+  `live_data: kotak`, `broker: kotak` (brokerage preset), `runs_dir: runs/trial20k`. Report with
+  `report --runs runs/trial20k`; it compares the same trades under Kotak vs Upstox brokerage.
 - `my.yaml`: the strategy bot's paper test. ORB on RELIANCE, HDFCBANK, ICICIBANK, INFY, SBIN;
   ₹5 lakh capital, 1% risk per trade, 3% daily-loss kill switch, entries 09:30–14:30,
   square-off 15:15, results-day guard on, NSE holidays. **Don't change rules mid-test**: it resets
