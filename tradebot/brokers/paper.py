@@ -57,9 +57,16 @@ class PaperBroker(Broker):
                      for s, p in self.positions.items() if p.is_open)
         return self.cash + unreal
 
+    def pending_entries(self) -> list[Order]:
+        """Orders waiting to fill that would open a new position (not exits of an open one)."""
+        return [o for o in self.pending if not self.get_position(o.instrument.symbol)]
+
     def used_margin(self) -> float:
-        return sum(abs(p.qty) * p.avg_price * self.margin_fn(p.instrument, p.side)
-                   for p in self.open_positions())
+        """Margin of open positions plus entry orders still waiting to fill (they will use it next candle)."""
+        held = sum(abs(p.qty) * p.avg_price * self.margin_fn(p.instrument, p.side) for p in self.open_positions())
+        waiting = sum(o.qty * self.last_price.get(o.instrument.symbol, o.limit_price or 0) * self.margin_fn(o.instrument, o.side)
+                      for o in self.pending_entries())
+        return held + waiting
 
     # --- simulation -------------------------------------------------------------
     def on_bar(self, inst: Instrument, ts: datetime, o: float, h: float, l: float, c: float) -> None:

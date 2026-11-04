@@ -107,7 +107,8 @@ class TradingDesk:
             if not ok:
                 self.log(ts, inst.symbol, "EVENT_BLOCK", side=sig.side.value, why=why)
                 return
-        d = self.risk.check_entry(sig, self.broker.equity(), len(self.broker.open_positions()),
+        n_open = len(self.broker.open_positions()) + len(self.broker.pending_entries())   # waiting entries count too
+        d = self.risk.check_entry(sig, self.broker.equity(), n_open,
                                   self.broker.used_margin(), live_clock=self.live_clock)
         if not d.approved:
             self.log(ts, inst.symbol, "RISK_BLOCK", side=sig.side.value, why=d.reason)

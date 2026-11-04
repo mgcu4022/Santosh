@@ -20,6 +20,7 @@
   datacheck -c CONFIG       compare Kotak / Upstox / Yahoo live prices: uptime, speed, agreement
   terminal [--demo]         option-trading screen in the browser (paper orders)
   live [--json]             live snapshot of the terminal and strategy bot, with risk warnings
+  dashboard                 read-only web dashboard of today's strategy bot(s): http://127.0.0.1:8060
   alert-test                send a test Telegram alert
   doctor                    check which keys/tokens are set
 """
@@ -187,6 +188,10 @@ def main(argv=None):
     tm.add_argument("--login", action="store_true", help="open the daily Upstox login first")
     tm.add_argument("--port", type=int, default=8050)
     tm.add_argument("--no-browser", action="store_true")
+    db = sub.add_parser("dashboard", parents=[common])
+    db.add_argument("--runs", default="runs")
+    db.add_argument("--port", type=int, default=8060)
+    db.add_argument("--no-browser", action="store_true")
     lv = sub.add_parser("live", parents=[common])
     lv.add_argument("--port", type=int, default=8050, help="option terminal port")
     lv.add_argument("--runs", default="runs")
@@ -351,6 +356,9 @@ def main(argv=None):
         print(f"Saved to {out}")
     elif args.cmd == "terminal":
         _terminal(args)
+    elif args.cmd == "dashboard":
+        from .dashboard import serve as serve_dashboard
+        serve_dashboard(args.runs, args.port, open_browser=not args.no_browser)
     elif args.cmd == "live":
         from .live import fetch_terminal, latest_paper_state, paper_warnings, render, terminal_warnings
         term = fetch_terminal(args.port)

@@ -72,6 +72,15 @@ class LiveFeed:
             self.on_backup = {sym for sym in self.specs if self._has_backup(sym)}
         self._polls = 0
 
+    def last_price(self, sym: str, latest: pd.DataFrame | None = None) -> float | None:
+        """Most recent price we know: Kotak's forming candle, else the last finished candle."""
+        b = self.builders.get(sym)
+        if sym in self.on_backup and b is not None and b.current:
+            return float(b.current["close"])
+        if latest is not None and len(latest):
+            return float(latest["close"].iloc[-1])
+        return None
+
     def _has_backup(self, sym) -> bool:
         b = self.specs[sym].backup or {}
         return self.kotak is not None and bool(b.get("kotak_token"))
@@ -180,6 +189,13 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
     context = MarketContext.build(ctx_cfg, symbols) if ctx_cfg.enabled else None
     desk, specs = build_desk(cfg, live_clock=True, notifier=notifier)
     desk.context = context
+    rc = desk.risk.cfg
+    desk.settings = {"capital": rc.capital, "live_data": str(cfg.get("live_data", "upstox")),
+                     "broker": cfg.get("broker") or "default", "entry_from": rc.no_entry_before,
+                     "entry_until": rc.no_entry_after, "square_off": rc.square_off_time,
+                     "risk_per_trade_pct": rc.risk_per_trade_pct, "max_open_positions": rc.max_open_positions,
+                     "max_daily_loss_pct": rc.max_daily_loss_pct,
+                     "strategies": {sp.instrument.symbol: sp.strategy_cfg.get("name") for sp in specs}}
     tf = cfg.get("timeframe", {"unit": "minutes", "interval": 5})
     if tf["unit"] != "minutes":
         raise ValueError("Paper trading supports minute candles only")
@@ -241,7 +257,9 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
                     break
                 time.sleep(poll_seconds)
                 continue
-            for sym, today in feed.poll(now).items():
+            polled = feed.poll(now)
+            desk.live_px = {sym: feed.last_price(sym, df) for sym, df in polled.items()}
+            for sym, today in polled.items():
                 try:
                     process_symbol(desk, sym, today, history, last_done, first_pass)
                     errors[sym] = 0
@@ -282,9 +300,24 @@ def process_symbol(desk, sym: str, today: pd.DataFrame, history: dict, last_done
         desk.on_bar(sym, prepared, i)
     if new_idx:
         last_done[sym] = prepared.index[new_idx[-1]]
+    if not hasattr(desk, "watch"):
+        desk.watch = {}
+    last = prepared.iloc[-1]
+    desk.watch[sym] = {"candle_time": prepared.index[-1].strftime("%H:%M"), "close": float(last["close"]),
+                       **{k: (None if pd.isna(last[k]) else float(last[k])) for k in
+                          ("or_high", "or_low", "or_breaks_before", "ema_fast", "ema_slow", "supertrend", "st_dir")
+                          if k in prepared.columns}}
 
 
 def _save(desk, run: Path) -> None:
+    log_ = desk.__dict__.setdefault("mtm_log", [])
+    stamp = datetime.now(IST).strftime("%H:%M")
+    mtm = round(desk.broker.equity() - desk.risk.day_start_equity, 2)
+    if not log_ or log_[-1][0] != stamp:
+        log_.append([stamp, mtm])
+        del log_[:-800]
+    else:
+        log_[-1][1] = mtm
     pd.DataFrame(desk.journal).to_csv(run / "journal.csv", index=False)
     pd.DataFrame([{**t.__dict__, "net_pnl": t.net_pnl} for t in desk.broker.trades]).to_csv(run / "trades.csv", index=False)
     (run / "state.json").write_text(json.dumps(snapshot(desk), indent=2, default=str), encoding="utf-8")
@@ -308,4 +341,47 @@ def snapshot(desk) -> dict:
             "max_trades": r.cfg.max_trades_per_day, "positions": positions,
             "closed": [{"symbol": t.symbol, "side": t.side, "net_pnl": round(t.net_pnl, 2), "why": t.exit_reason,
                         "exit_time": t.exit_time} for t in b.trades[-10:]],
-            "recent_events": [{k: v for k, v in e.items()} for e in desk.journal[-12:]]}
+            "recent_events": [{k: v for k, v in e.items()} for e in desk.journal[-12:]],
+            "events": [{k: v for k, v in e.items()} for e in desk.journal[-60:]],
+            "watch": watchlist(desk), "settings": getattr(desk, "settings", {}),
+            "mtm_log": getattr(desk, "mtm_log", [])}
+
+
+def watchlist(desk) -> list[dict]:
+    """Per stock: live price and where it stands versus the strategy's trigger, in plain words."""
+    rows = []
+    strategies = getattr(desk, "settings", {}).get("strategies", {})
+    for sym, book in desk.books.items():
+        w = getattr(desk, "watch", {}).get(sym, {})
+        px = (getattr(desk, "live_px", {}) or {}).get(sym) or w.get("close")
+        pos = desk.broker.get_position(sym)
+        row = {"symbol": sym, "price": px, "candle_time": w.get("candle_time"),
+               "strategy": strategies.get(sym) or book.strategy.name, "in_trade": bool(pos)}
+        hi, lo = w.get("or_high"), w.get("or_low")
+        if "or_high" in w or row["strategy"] == "orb":
+            row.update(range_high=hi, range_low=lo)
+            if pos:
+                row["status"] = "In a trade"
+            elif hi is None or lo is None:
+                row["status"] = "Waiting for opening range (forms 09:15-09:30)"
+            elif (w.get("or_breaks_before") or 0) > 0:
+                row["status"] = "Range already broken today (one try per day)"
+            elif px:
+                up, dn = (hi - px) / px * 100, (px - lo) / px * 100
+                row.update(to_high_pct=round(up, 2), to_low_pct=round(dn, 2))
+                if px > hi:
+                    row["status"] = "Above range: buy signal if the 5-min candle closes here"
+                elif px < lo:
+                    row["status"] = "Below range: sell signal if the 5-min candle closes here"
+                else:
+                    near = "high" if up < dn else "low"
+                    row["status"] = f"Inside range, {min(up, dn):.2f}% from the {near}"
+        elif "ema_fast" in w and w.get("ema_fast") and w.get("ema_slow"):
+            gap = (w["ema_fast"] / w["ema_slow"] - 1) * 100
+            row["status"] = "In a trade" if pos else f"Fast EMA {'above' if gap > 0 else 'below'} slow by {abs(gap):.2f}%"
+        elif "st_dir" in w and w.get("st_dir"):
+            row["status"] = "In a trade" if pos else f"Supertrend {'up' if w['st_dir'] > 0 else 'down'}, line {w.get('supertrend', 0):.2f}"
+        else:
+            row["status"] = "Warming up"
+        rows.append(row)
+    return rows

@@ -215,3 +215,19 @@ def test_analyst_caches_per_symbol_side_day():
     a.review(sig(), BARS)
     a.review(sig(), BARS)
     assert len(c.calls) == 1
+
+
+def test_simultaneous_signals_respect_max_open_positions():
+    """Regression: 3 stocks signalling on the same candle all got in with max_open_positions=2,
+    because entries fill at the next open and were not counted while waiting."""
+    from tradebot.models import Signal as Sig
+    risk = RiskManager(RiskConfig(capital=20_000, max_open_positions=2, max_position_pct=50))
+    broker = PaperBroker(20_000, slippage_bps=0, margin_fn=risk.margin_fraction)
+    books = [Book(Instrument(s), build_strategy("orb")) for s in ("A", "B", "C")]
+    desk = TradingDesk(books, risk, broker)
+    for s in ("A", "B", "C"):
+        broker.last_price[s] = 100.0
+        desk._try_enter(Sig(Instrument(s), Action.ENTER, Side.BUY, 100.0, T, "orb", stop_loss=99.0), pd.DataFrame())
+    assert len(broker.pending_entries()) == 2
+    assert any(j["event"] == "RISK_BLOCK" and "Max open positions" in j["why"] for j in desk.journal)
+    assert broker.used_margin() > 0                                   # waiting entries reserve margin

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bot Dashboard</title>
+<style>
+  :root {
+    --bg: #0e1117; --panel: #161b24; --panel2: #1d2330; --line: #2b3343; --text: #e8ebf1; --muted: #93a0b5;
+    --green: #22c55e; --green-bg: #11301e; --red: #f05252; --red-bg: #3a1618; --amber: #f5b301; --blue: #60a5fa;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  .pos { color: var(--green); } .neg { color: var(--red); } .muted { color: var(--muted); }
+  select { font: inherit; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+  header { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; padding: 12px 16px;
+           background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 17px; margin: 0; }
+  .badge { font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px; letter-spacing: .03em; }
+  .b-run { background: var(--green-bg); color: #86efac; } .b-stale { background: #3a2c0b; color: var(--amber); }
+  .b-halt { background: var(--red-bg); color: #fecaca; } .b-paper { background: #2b2410; color: var(--amber); }
+  .mtm { margin-left: auto; text-align: right; } .mtm b { font-size: 26px; } .mtm small { display: block; color: var(--muted); font-size: 12px; }
+  .wrap { padding: 12px 16px 24px; display: grid; gap: 12px; }
+  .alert { padding: 10px 14px; border-radius: 10px; font-weight: 600; display: none; }
+  .alert.warn { background: #3a2c0b; color: #fde68a; } .alert.bad { background: var(--red-bg); color: #fecaca; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+  .card .k { color: var(--muted); font-size: 12px; } .card .v { font-size: 18px; font-weight: 650; margin: 2px 0; }
+  .card .e { color: var(--muted); font-size: 12px; }
+  .meter { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; margin: 6px 0 4px; }
+  .meter i { display: block; height: 100%; background: var(--green); border-radius: 99px; transition: width .4s; }
+  .meter i.warn { background: var(--amber); } .meter i.bad { background: var(--red); }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; }
+  @media (max-width: 1100px) { .grid2 { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: 0; }
+  .ph { padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .ph b { font-size: 15px; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { color: var(--muted); font-weight: 600; font-size: 11.5px; padding: 7px 9px; border-bottom: 1px solid var(--line);
+       background: var(--panel2); text-align: right; white-space: nowrap; }
+  td { padding: 7px 9px; border-bottom: 1px solid #1f2633; text-align: right; white-space: nowrap; }
+  .l { text-align: left !important; } .wrapcell { white-space: normal; min-width: 220px; }
+  .rangebar { position: relative; height: 8px; background: var(--panel2); border-radius: 99px; min-width: 120px; }
+  .rangebar .in { position: absolute; top: 0; bottom: 0; left: 20%; right: 20%; background: #2b3a55; border-radius: 99px; }
+  .rangebar .dot { position: absolute; top: -3px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%;
+                   background: var(--amber); border: 2px solid var(--bg); }
+  .tag { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; }
+  .t-long { background: var(--green-bg); color: #86efac; } .t-short { background: var(--red-bg); color: #fca5a5; }
+  .pcards { display: grid; gap: 8px; padding: 10px; }
+  .pcard { border: 1px solid var(--line); border-left: 4px solid var(--green); border-radius: 8px; padding: 8px 10px; background: var(--panel2); }
+  .pcard.short { border-left-color: var(--red); }
+  .pcard .t { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-weight: 650; }
+  .pgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 10px; margin-top: 6px; font-size: 13px; }
+  .pgrid small { display: block; color: var(--muted); font-size: 11px; }
+  .track { position: relative; height: 10px; background: linear-gradient(90deg, rgba(240,82,82,.35), rgba(147,160,181,.15) 50%, rgba(34,197,94,.35)); border-radius: 99px; margin: 10px 0 2px; }
+  .track i { position: absolute; top: -3px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--amber); border: 2px solid var(--bg); }
+  .tlab { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .empty { padding: 18px; text-align: center; color: var(--muted); }
+  .ev { padding: 6px 12px; border-bottom: 1px solid #1f2633; font-size: 13px; }
+  .ev .time { color: var(--muted); margin-right: 6px; }
+  .ev.ENTRY_SIG { color: #93c5fd; } .ev.CLOSED { color: #e8ebf1; } .ev.RISK_BLOCK, .ev.EVENT_BLOCK { color: var(--muted); }
+  .ev.AI_VETO { color: #fcd34d; } .ev.HALT { color: #fca5a5; font-weight: 700; }
+  .log { max-height: 340px; overflow-y: auto; }
+  #chart { width: 100%; height: 180px; display: block; }
+  .foot { padding: 0 16px 18px; color: var(--muted); font-size: 12px; }
+  @media (max-width: 640px) { .w { display: none; } .wrapcell { min-width: 0; } .pgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mtm { margin-left: 0; text-align: left; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Strategy bot</h1>
+  <select id="run" title="Which bot"></select>
+  <span class="badge b-paper">PAPER</span>
+  <span class="badge" id="status">…</span>
+  <span class="muted num" id="updated"></span>
+  <div class="mtm"><small>Today's profit / loss (after charges)</small><b class="num" id="mtm">–</b>
+    <small class="num" id="mtmsub"></small></div>
+</header>
+
+<div class="wrap">
+  <div class="alert" id="alert"></div>
+
+  <section>
+    <h2>Today's limits</h2>
+    <div class="cards">
+      <div class="card"><div class="k">Loss used vs daily stop</div><div class="meter"><i id="m_loss"></i></div><div class="e num" id="t_loss"></div></div>
+      <div class="card"><div class="k">Trades used today</div><div class="meter"><i id="m_trades"></i></div><div class="e num" id="t_trades"></div></div>
+      <div class="card"><div class="k">Open positions</div><div class="meter"><i id="m_pos"></i></div><div class="e num" id="t_pos"></div></div>
+      <div class="card"><div class="k">Trading window</div><div class="v" id="window">–</div><div class="e" id="window_e"></div></div>
+      <div class="card"><div class="k">Setup</div><div class="v num" id="capital">–</div><div class="e" id="setup"></div></div>
+    </div>
+  </section>
+
+  <div class="grid2">
+    <section class="panel">
+      <div class="ph"><b>Watchlist</b><span class="muted">what each stock needs before the bot acts</span></div>
+      <div class="scroll"><table>
+        <thead><tr><th class="l">Stock</th><th>Price</th><th class="w">Opening range (low – high)</th><th class="l w">Where price is</th><th class="l">Status</th><th class="w">Candle</th></tr></thead>
+        <tbody id="watch"></tbody>
+      </table></div>
+    </section>
+
+    <section style="display:grid;gap:12px;align-content:start;min-width:0">
+      <div class="panel"><div class="ph"><b>Open positions</b><span class="muted" id="posinfo"></span></div><div class="pcards" id="positions"></div></div>
+      <div class="panel"><div class="ph"><b>Profit / loss through the day</b></div>
+        <svg id="chart" viewBox="0 0 600 180" preserveAspectRatio="none"></svg></div>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <section class="panel"><div class="ph"><b>What the bot did</b><span class="muted">entries, exits and skipped trades, newest first</span></div>
+      <div class="log" id="events"></div></section>
+    <section class="panel"><div class="ph"><b>Closed trades</b></div>
+      <div class="scroll log"><table>
+        <thead><tr><th class="l">Time</th><th class="l">Stock</th><th class="l">Side</th><th>Net P&amp;L</th><th class="l">Why closed</th></tr></thead>
+        <tbody id="closed"></tbody></table></div></section>
+  </div>
+</div>
+<div class="foot">Read-only view of the paper-trading bot. It cannot place or close trades. To stop the bot, use the STOP file
+  or close its window. Not investment advice.</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 2) => x == null || isNaN(x) ? "–" : Number(x).toLocaleString("en-IN", {minimumFractionDigits: d, maximumFractionDigits: d});
+const rs = (x, d = 0) => x == null ? "–" : (x < 0 ? "-₹" : "₹") + fmt(Math.abs(x), d);
+const cls = x => x > 0 ? "pos" : x < 0 ? "neg" : "";
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+let current = null;
+
+function meter(id, used, limit) {
+  const pct = limit > 0 ? Math.min(100, Math.max(0, used / limit * 100)) : 0;
+  $(id).style.width = pct + "%"; $(id).className = pct >= 80 ? "bad" : pct >= 50 ? "warn" : "";
+}
+
+async function loadRuns() {
+  const runs = await (await fetch("/api/runs")).json();
+  const sel = $("run"), key = runs.map(r => r.id).join(",");
+  if (sel.dataset.k !== key) {
+    sel.innerHTML = runs.map(r => `<option value="${esc(r.id)}">${esc(r.label)} (₹${fmt(r.capital, 0)})</option>`).join("")
+      || `<option value="">No bot running today</option>`;
+    sel.dataset.k = key;
+    if (!current || !runs.some(r => r.id === current)) current = runs[0]?.id || null;
+    sel.value = current || "";
+  }
+  return runs.length;
+}
+
+function eventText(e) {
+  const side = e.side === "BUY" ? "Bought" : e.side === "SELL" ? "Sold (short)" : "";
+  switch (e.event) {
+    case "ENTRY_SIG": return `${side} ${e.qty ?? ""} ${e.symbol} near ₹${fmt(e.ref)} · stop ₹${fmt(e.stop)}${e.target ? ` · target ₹${fmt(e.target)}` : ""}. Why: ${e.why || ""}`;
+    case "CLOSED": return `Closed ${e.qty ?? ""} ${e.symbol} at ₹${fmt(e.exit)} → ${rs(Number(e.net_pnl), 0)} (${e.why || ""})`;
+    case "EXIT_SIG": return `Exit signal on ${e.symbol}: ${e.why || ""}`;
+    case "RISK_BLOCK": return `Skipped ${e.symbol}${e.side ? " " + e.side.toLowerCase() : ""}: ${e.why || "risk rules"}`;
+    case "EVENT_BLOCK": return `Skipped ${e.symbol}: ${e.why || "market event"}`;
+    case "AI_VETO": return `AI analyst vetoed ${e.symbol}: ${e.why || ""}`;
+    case "HALT": return `TRADING STOPPED for today: ${e.why || ""}`;
+    default: return `${e.event} ${e.symbol || ""} ${e.why || ""}`;
+  }
+}
+
+function render(s) {
+  const st = s.settings || {}, age = s.age_seconds;
+  const stale = age != null && age > 120;
+  const status = s.halted ? ["STOPPED FOR TODAY", "b-halt"] : stale ? ["NO RECENT UPDATE", "b-stale"] : ["RUNNING", "b-run"];
+  $("status").textContent = status[0]; $("status").className = "badge " + status[1];
+  $("updated").textContent = s.updated ? `updated ${s.updated.slice(11, 19)}${age != null ? ` (${age}s ago)` : ""}` : "";
+  $("mtm").textContent = (s.mtm > 0 ? "+" : s.mtm < 0 ? "-" : "") + "₹" + fmt(Math.abs(s.mtm || 0));
+  $("mtm").className = "num " + cls(s.mtm);
+  $("mtmsub").textContent = `Booked ${rs(s.realized)} · equity ${rs(s.equity)}`;
+  const al = $("alert");
+  if (s.halted) { al.className = "alert bad"; al.style.display = "block"; al.textContent = `Trading stopped for today: ${s.halt_reason}. Open positions were closed.`; }
+  else if (stale) { al.className = "alert warn"; al.style.display = "block"; al.textContent = `No update for ${Math.round(age / 60)} min. Is the bot still running? Check its PowerShell window.`; }
+  else al.style.display = "none";
+
+  const lossUsed = Math.max(0, -(s.mtm || 0));
+  meter("m_loss", lossUsed, s.daily_loss_limit);
+  $("t_loss").textContent = `${rs(lossUsed)} of ${rs(s.daily_loss_limit)} · bot stops for the day at the limit`;
+  meter("m_trades", s.trades_today, s.max_trades);
+  $("t_trades").textContent = `${s.trades_today} of ${s.max_trades}`;
+  const maxPos = st.max_open_positions || 0;
+  meter("m_pos", (s.positions || []).length, maxPos);
+  $("t_pos").textContent = `${(s.positions || []).length} of ${maxPos || "–"} · max risk per trade ${rs((st.capital || 0) * (st.risk_per_trade_pct || 0) / 100)}`;
+  const now = (s.updated || "").slice(11, 16);
+  const open = st.entry_from && now >= st.entry_from && now <= st.entry_until;
+  $("window").textContent = !st.entry_from ? "–" : now < st.entry_from ? "Not yet" : open ? "Open for entries" : now < st.square_off ? "No new entries" : "Closed";
+  $("window_e").textContent = st.entry_from ? `New trades ${st.entry_from}–${st.entry_until} · everything closes ${st.square_off}` : "";
+  $("capital").textContent = rs(st.capital || s.capital);
+  $("setup").textContent = `Prices: ${st.live_data || "?"} · charges: ${st.broker || "?"} · daily stop ${st.max_daily_loss_pct || "?"}%`;
+
+  $("watch").innerHTML = (s.watch || []).map(w => {
+    let bar = "–";
+    if (w.range_high != null && w.range_low != null && w.price) {
+      const lo = w.range_low, hi = w.range_high, span = (hi - lo) || 1;
+      const pct = Math.max(-5, Math.min(105, 20 + (w.price - lo) / span * 60));   // range occupies 20%-80%
+      bar = `<div class="rangebar" title="Opening range ${fmt(lo)} – ${fmt(hi)}"><div class="in"></div><div class="dot" style="left:${pct}%"></div></div>`;
+    }
+    const stColor = w.in_trade ? "pos" : /signal/.test(w.status || "") ? "" : "muted";
+    return `<tr><td class="l"><b>${esc(w.symbol)}</b><br><small class="muted">${esc(w.strategy || "")}</small></td>
+      <td class="num">${w.price ? "₹" + fmt(w.price) : "–"}</td>
+      <td class="num w">${w.range_low != null ? `${fmt(w.range_low)} – ${fmt(w.range_high)}` : "–"}</td>
+      <td class="l w">${bar}</td>
+      <td class="l wrapcell ${stColor}">${esc(w.status || "")}</td>
+      <td class="num muted w">${esc(w.candle_time || "")}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="empty">Waiting for the first candles…</td></tr>`;
+
+  const pos = s.positions || [];
+  $("posinfo").textContent = pos.length ? `${pos.length} open` : "";
+  $("positions").innerHTML = pos.map(p => {
+    const long = p.side === "LONG", q = Math.abs(p.qty);
+    let track = "";
+    if (p.stop && p.target) {
+      const a = Math.min(p.stop, p.target), b = Math.max(p.stop, p.target);
+      let pct = (p.ltp - a) / ((b - a) || 1) * 100; if (!long) pct = 100 - pct;
+      pct = Math.max(0, Math.min(100, long ? pct : pct));
+      track = `<div class="track"><i style="left:${pct}%"></i></div><div class="tlab"><span>stop ₹${fmt(p.stop)}</span><span>entry ₹${fmt(p.avg)}</span><span>target ₹${fmt(p.target)}</span></div>`;
+    }
+    return `<div class="pcard ${long ? "" : "short"}">
+      <div class="t"><span><span class="tag ${long ? "t-long" : "t-short"}">${long ? "BOUGHT" : "SOLD"}</span> ${q} ${esc(p.symbol)}</span>
+        <span class="num ${cls(p.pnl)}">${rs(p.pnl)}</span></div>
+      <div class="pgrid num"><div><small>Entry</small>₹${fmt(p.avg)}</div><div><small>Now</small>₹${fmt(p.ltp)}</div>
+        <div><small>Stop-loss</small>₹${fmt(p.stop)}</div><div><small>Target</small>${p.target ? "₹" + fmt(p.target) : "–"}</div></div>
+      ${track}</div>`;
+  }).join("") || `<div class="empty">No open positions. The bot is waiting for a valid setup.</div>`;
+
+  const evs = (s.events || []).slice().reverse();
+  $("events").innerHTML = evs.map(e => `<div class="ev ${esc(e.event)}"><span class="time num">${esc(String(e.time || "").slice(11, 16))}</span>${esc(eventText(e))}</div>`).join("")
+    || `<div class="empty">Nothing yet today. Skipped and taken trades appear here.</div>`;
+  $("closed").innerHTML = (s.closed || []).slice().reverse().map(t => `<tr><td class="l num">${esc(String(t.exit_time || "").slice(11, 16))}</td>
+    <td class="l">${esc(t.symbol)}</td><td class="l">${t.side === "LONG" ? "Bought" : "Sold"}</td>
+    <td class="num ${cls(t.net_pnl)}">${rs(t.net_pnl)}</td><td class="l muted">${esc(t.why)}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="empty">No closed trades yet</td></tr>`;
+  renderChart(s.mtm_log || [], s.daily_loss_limit);
+}
+
+function renderChart(log, limit) {
+  const svg = $("chart"), W = 600, H = 180, pad = 26;
+  if (log.length < 2) { svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" fill="#93a0b5" text-anchor="middle" font-size="13">The chart fills in as the day goes on</text>`; return; }
+  const ys = log.map(p => p[1]);
+  let y0 = Math.min(0, ...ys, limit ? -limit * 0.25 : 0), y1 = Math.max(0, ...ys);
+  if (y1 - y0 < 50) { y1 += 25; y0 -= 25; }
+  const X = i => pad + i / (log.length - 1) * (W - 2 * pad), Y = v => H - pad - (v - y0) / (y1 - y0) * (H - 2 * pad);
+  const line = log.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+  const zy = Y(0), last = log[log.length - 1][1];
+  svg.innerHTML = `<line x1="${pad}" x2="${W - pad}" y1="${zy}" y2="${zy}" stroke="#4b5568" stroke-dasharray="4 4"/>
+    ${limit && -limit >= y0 ? `<line x1="${pad}" x2="${W - pad}" y1="${Y(-limit)}" y2="${Y(-limit)}" stroke="#f05252" stroke-dasharray="2 4"/><text x="${W - pad}" y="${Y(-limit) - 4}" fill="#fca5a5" font-size="11" text-anchor="end">daily stop -₹${fmt(limit, 0)}</text>` : ""}
+    <path d="${line}" fill="none" stroke="${last >= 0 ? "#22c55e" : "#f05252"}" stroke-width="2"/>
+    <text x="${pad}" y="${H - 6}" fill="#93a0b5" font-size="11">${log[0][0]}</text>
+    <text x="${W - pad}" y="${H - 6}" fill="#93a0b5" font-size="11" text-anchor="end">${log[log.length - 1][0]}</text>
+    <text x="${W - pad}" y="${Y(last) - 6}" fill="#e8ebf1" font-size="12" text-anchor="end">${rs(last)}</text>`;
+}
+
+async function refresh() {
+  try {
+    const n = await loadRuns();
+    if (!n || !current) {
+      $("status").textContent = "NO BOT TODAY"; $("status").className = "badge b-stale";
+      $("alert").className = "alert warn"; $("alert").style.display = "block";
+      $("alert").textContent = "No bot has run today yet. Start it with: python -m tradebot paper -c config/trial_20k.yaml -v";
+      return;
+    }
+    const r = await fetch("/api/state?run=" + encodeURIComponent(current));
+    if (r.ok) render(await r.json());
+  } catch (e) { $("updated").textContent = "dashboard not reachable"; }
+}
+$("run").onchange = e => { current = e.target.value; refresh(); };
+refresh(); setInterval(refresh, 3000);
+</script>
+</body>
+</html>

@@ -116,6 +116,7 @@ listed in the config are skipped automatically.
 | `terminal [--demo\|--login] [--port N]` | Option terminal in the browser | Upstox (live) |
 | `preflight -c CFG [--offline]` | Pre-market checklist | — |
 | `live [--json] [--port N]` | Live snapshot of terminal + strategy bot with risk warnings (read-only) | something running |
+| `dashboard [--runs runs] [--port 8060]` | Read-only web dashboard of today's strategy bot(s) (watchlist, positions, limits, journal) | a bot running |
 | `report [--prefix paper\|terminal]` | Multi-day results and verdict | saved runs |
 | `plan SYMBOL BUY ENTRY STOP [--segment FUT --lot 65 ...]` | Size one trade: qty, risk, charges, breakeven | nothing |
 | `scan [--nse [--all]\|--google-url URL\|--csv-dir DIR] [--max-price 200] [--write-config CFG]` | Rank stocks; `--all` = every EQ-series NSE stock; `--write-config` writes a ready config with Kotak tokens | Yahoo/NSE/Google |

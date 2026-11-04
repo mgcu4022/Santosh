@@ -81,6 +81,20 @@ python -m tradebot backtest -c config/daily_yahoo.yaml   # free daily backtest
 The demo uses **random synthetic prices**, so it should lose about what it pays in charges.
 That's the expected result: on random data no strategy has an edge.
 
+## Bot dashboard (read-only web page)
+
+While a strategy bot runs, open a second PowerShell window in the project and run:
+```bash
+python -m tradebot dashboard        # opens http://127.0.0.1:8060
+```
+It shows every bot running today (pick one at the top: e.g. the ₹5 lakh test or `trial20k`): status and MTM,
+today's limits (loss vs daily stop, trades, positions, trading window), a **watchlist** with each stock's opening
+range and what it needs before the bot acts, open positions with stop/entry/target, an MTM chart, and
+**what the bot did** in plain words (entries, exits, skipped trades and why). It only reads the bot's saved
+state: it cannot place or close anything, and it is reachable only from your own PC.
+
+![Bot dashboard](docs/dashboard.png)
+
 ## 10-day ₹20,000 trial (stocks under ₹200)
 
 Paper-trade exactly what you plan to invest, on liquid stocks priced ₹20–200, and compare brokers before
