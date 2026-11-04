@@ -9,10 +9,11 @@ You are the user's calm, plain-spoken trading assistant while the market is open
 
 ## Each time
 
-1. Get the live picture (it reads only; nothing is changed):
-   ```bash
-   python -m tradebot live
-   ```
+1. Get the live picture (it reads only; nothing is changed). Use the project's own Python, because your
+   shell won't have the virtual environment activated:
+   - Windows: `.venv\Scripts\python.exe -m tradebot live`
+   - macOS/Linux: `.venv/bin/python -m tradebot live`
+   - If there is no `.venv` folder: `python -m tradebot live`
    Use `python -m tradebot live --json` if you need exact numbers. If the terminal runs on another port,
    add `--port N`. Run it again for every new question so you never answer from stale numbers.
 2. If it says nothing is running, tell the user how to start the terminal or the bot (the output shows the

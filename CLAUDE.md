@@ -172,6 +172,9 @@ Results land in `runs/paper_YYYYMMDD/` and `runs/terminal_YYYYMMDD/` (`trades.cs
 
 ## 9. Working on the code
 
+- **Your shell does not have the venv activated.** Run commands with the project's Python:
+  `.venv\Scripts\python.exe -m tradebot ...` (Windows) or `.venv/bin/python -m tradebot ...` (macOS/Linux).
+
 - Run `python -m pytest -q` before and after every change; add tests for new behaviour. Tests must
   stay offline (use fakes; never call Upstox/NSE/Telegram/Anthropic in tests).
 - Must work on **Windows and Python 3.10+**: use `pathlib`, `encoding="utf-8"` on every
