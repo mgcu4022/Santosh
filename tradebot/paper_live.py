@@ -57,6 +57,8 @@ class LiveFeed:
         self.on_backup: set[str] = set()
         self.builders = {sym: BarBuilder(interval) for sym in self.specs}
         self.last_primary: dict[str, pd.DataFrame] = {}
+        if upstox is None:   # Kotak Neo is the main source: every symbol with a Kotak token starts there
+            self.on_backup = {sym for sym in self.specs if self._has_backup(sym)}
         self._polls = 0
 
     def _has_backup(self, sym) -> bool:
@@ -67,8 +69,10 @@ class LiveFeed:
         self._polls += 1
         out = {}
         for sym, spec in self.specs.items():
-            if sym in self.on_backup and self._polls % RETRY_PRIMARY_EVERY:
-                continue                                  # stay on backup until the next retry
+            if sym in self.on_backup and (self.upstox is None or self._polls % RETRY_PRIMARY_EVERY):
+                continue                                  # stay on Kotak (until the next Upstox retry)
+            if self.upstox is None:
+                continue                                  # no Upstox and no Kotak token for this symbol
             try:
                 df = self.upstox.intraday(spec.data_key, "minutes", self.interval)
                 self.last_primary[sym] = completed(df, self.interval, now)
@@ -112,6 +116,8 @@ def warmup_history(spec, interval: int, days: int, upstox) -> pd.DataFrame:
     """Previous days' candles so indicators are ready. Upstox first, then Yahoo."""
     end = date.today() - timedelta(days=1)
     try:
+        if upstox is None:
+            raise RuntimeError("Upstox not used (Kotak Neo is the live source)")
         return upstox.historical(spec.data_key, "minutes", interval, date.today() - timedelta(days=days), end)
     except Exception as e:
         log.warning("%s: Upstox history failed (%s); trying Yahoo", spec.instrument.symbol, e)
@@ -160,19 +166,30 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
     if tf["unit"] != "minutes":
         raise ValueError("Paper trading supports minute candles only")
 
-    from .upstox_auth import get_token
-    token = get_token(login, login_timeout_min, notify=notifier.send if notifier else None)
-    if login:
-        if token is None:
+    live_data = str(cfg.get("live_data", "upstox")).lower()
+    kotak = None
+    if live_data == "kotak":
+        from .data.kotak import KotakNeoQuotes
+        missing = [s.instrument.symbol for s in specs if not (s.backup or {}).get("kotak_token")]
+        if missing:
+            raise ValueError(f"live_data: kotak needs backup: {{kotak_token: ...}} for {', '.join(missing)}")
+        kotak = KotakNeoQuotes()
+        kotak.client                     # log in now (TOTP prompt at start, not mid-session)
+        upstox = None
+        poll_seconds = min(poll_seconds, 5)   # quote polling builds the candles: poll often
+        log.info("Live data: Kotak Neo quotes -> 5-min candles (history from Yahoo)")
+    else:
+        from .upstox_auth import get_token
+        token = get_token(login, login_timeout_min, notify=notifier.send if notifier else None)
+        if login and token is None:
             msg = "[PAPER] No Upstox login; continuing on backup data (Kotak Neo) where configured."
             log.warning(msg)
             if notifier:
                 notifier.send(msg)
-    upstox = UpstoxData(access_token=token)
-    kotak = None
-    if any(s.backup for s in specs):
-        from .data.kotak import KotakNeoQuotes
-        kotak = KotakNeoQuotes()   # logs in lazily, only if a backup is needed
+        upstox = UpstoxData(access_token=token)
+        if any(s.backup for s in specs):
+            from .data.kotak import KotakNeoQuotes
+            kotak = KotakNeoQuotes()   # logs in lazily, only if a backup is needed
     feed = LiveFeed(specs, tf["interval"], upstox, kotak,
                     notify=notifier.send if notifier else (lambda m: log.warning(m)))
 

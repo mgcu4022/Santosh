@@ -200,6 +200,13 @@ Backtests don't use this: past ban lists aren't available, and old headlines wou
 NSE's site blocks obvious bots, so the client uses a browser-like session and pauses between calls.
 If NSE changes a file format, only the small parsers in `tradebot/data/nse.py` need updating.
 
+## Kotak Neo as the live data source (or backup)
+
+Set `live_data: kotak` in the config (it is the default in `config/my.yaml`) to run the strategy bot on
+**Kotak Neo** prices without Upstox: quotes are polled every 5 seconds and built into 5-minute candles;
+earlier days' history comes from Yahoo. With `live_data: upstox`, Kotak is only the backup described below.
+The option terminal's live chain still needs Upstox (it stays on demo data otherwise).
+
 ## Kotak Neo backup (optional, free for Kotak clients)
 
 If Upstox fails 3 times in a row for a stock (expired token, outage), paper trading switches that

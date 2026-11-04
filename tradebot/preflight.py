@@ -50,11 +50,15 @@ def run_checks(cfg: dict, online: bool = True, now: datetime | None = None) -> l
     add(OK if future else WARN, "Holiday list", f"{len(future)} upcoming" if future else "no upcoming holidays listed; update it")
 
     # 3. Keys
+    kotak_main = str(cfg.get("live_data", "upstox")).lower() == "kotak"
     has_login = os.environ.get("UPSTOX_API_KEY") and os.environ.get("UPSTOX_API_SECRET")
     has_token = os.environ.get("UPSTOX_ACCESS_TOKEN")
-    add(OK if (has_login or has_token) else FAIL, "Upstox credentials",
-        "access token set (no daily login needed)" if has_token else ("API key/secret set (daily --login)"
-        if has_login else "put UPSTOX_ACCESS_TOKEN (Analytics Token) in .env"))
+    if kotak_main:
+        add(OK, "Live data source", "Kotak Neo (live_data: kotak); Upstox not needed")
+    else:
+        add(OK if (has_login or has_token) else FAIL, "Upstox credentials",
+            "access token set (no daily login needed)" if has_token else ("API key/secret set (daily --login)"
+            if has_login else "put UPSTOX_ACCESS_TOKEN (Analytics Token) in .env"))
     if cfg.get("alerts", {}).get("telegram"):
         tg = os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID")
         add(OK if tg else FAIL, "Telegram", "set" if tg else "telegram: true but TELEGRAM_* not set")
@@ -68,8 +72,22 @@ def run_checks(cfg: dict, online: bool = True, now: datetime | None = None) -> l
             sdk = True
         except ImportError:
             sdk = False
-        add(OK if kot and sdk else WARN, "Kotak Neo backup",
-            "ready" if kot and sdk else "not set up: if Upstox fails, those stocks pause (optional)")
+        missing = [k for k in ("KOTAK_CONSUMER_KEY", "KOTAK_MOBILE", "KOTAK_UCC", "KOTAK_MPIN") if not os.environ.get(k)]
+        need = ("install the SDK (see README)" if not sdk else "") + \
+               (("; " if not sdk and missing else "") + "set " + ", ".join(missing) + " in .env" if missing else "")
+        no_tok = [s.instrument.symbol for s in specs if not (s.backup or {}).get("kotak_token")]
+        if kotak_main:
+            add(OK if kot and sdk and not no_tok else FAIL, "Kotak Neo (main data)",
+                "ready: run `python -m tradebot kotak-test` to see live prices" if kot and sdk and not no_tok else
+                (need or f"no kotak_token for {', '.join(no_tok)}"))
+            add(OK if os.environ.get("KOTAK_TOTP_SECRET") else WARN, "Kotak TOTP",
+                "automatic (KOTAK_TOTP_SECRET set)" if os.environ.get("KOTAK_TOTP_SECRET") else
+                "you'll type the 6-digit authenticator code at start-up")
+        else:
+            add(OK if kot and sdk else WARN, "Kotak Neo backup",
+                "ready" if kot and sdk else "not set up: if Upstox fails, those stocks pause (optional)")
+    elif kotak_main:
+        add(FAIL, "Kotak Neo (main data)", "add backup: {kotak_token: ...} to each instrument")
 
     # 4. Disk
     try:
@@ -82,7 +100,7 @@ def run_checks(cfg: dict, online: bool = True, now: datetime | None = None) -> l
         add(FAIL, "Results folder", str(e))
 
     # 5. Network (real calls)
-    if online:
+    if online and not kotak_main:
         from .data.upstox import UpstoxData
         s0 = specs[0]
         try:
@@ -91,13 +109,13 @@ def run_checks(cfg: dict, online: bool = True, now: datetime | None = None) -> l
         except Exception as e:
             add(WARN if has_login and not has_token else FAIL, "Upstox data",
                 f"{str(e)[:120]} (normal before today's login)" if has_login and not has_token else str(e)[:160])
-        if cfg.get("context", {}).get("enabled"):
-            from .data.nse import NseClient
-            try:
-                ban = NseClient().ban_list()
-                add(OK, "NSE ban list", f"{len(ban)} stocks banned" if ban else "empty")
-            except Exception as e:
-                add(WARN, "NSE ban list", f"unreachable ({str(e)[:80]}); trading continues without it")
+    if online and cfg.get("context", {}).get("enabled"):
+        from .data.nse import NseClient
+        try:
+            ban = NseClient().ban_list()
+            add(OK, "NSE ban list", f"{len(ban)} stocks banned" if ban else "empty")
+        except Exception as e:
+            add(WARN, "NSE ban list", f"unreachable ({str(e)[:80]}); trading continues without it")
     return out
 
 

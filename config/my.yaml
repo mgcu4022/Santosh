@@ -5,6 +5,7 @@
 # gives clean evidence. Don't change rules mid-test; it resets the evidence.
 
 capital: 500000             # Rs 5 lakh paper capital
+live_data: kotak            # kotak = Kotak Neo quotes (needs KOTAK_* in .env); upstox = Upstox candles
 timeframe: {unit: minutes, interval: 5}
 slippage_bps: 3             # a little pessimistic on purpose
 

@@ -155,7 +155,8 @@ def main(argv=None):
     nw = sub.add_parser("news")
     nw.add_argument("symbol", nargs="?")
     nw.add_argument("--hours", type=int, default=48)
-    sub.add_parser("kotak-test")
+    kt = sub.add_parser("kotak-test")
+    kt.add_argument("-c", "--config", default="config/my.yaml")
     kf = sub.add_parser("kotak-find")
     kf.add_argument("symbol")
     kf.add_argument("--segment", default="nse_cm", help="nse_cm, bse_cm, nse_fo")
@@ -289,7 +290,16 @@ def main(argv=None):
             print("  no matching headlines")
     elif args.cmd == "kotak-test":
         from .data.kotak import KotakNeoQuotes
-        print(KotakNeoQuotes().ltp([("2885", "nse_cm")]))   # 2885 = RELIANCE on NSE (check)
+        specs = [sp for sp in parse_instruments(load_config(args.config)) if (sp.backup or {}).get("kotak_token")]
+        if not specs:
+            print("No instruments with backup: {kotak_token: ...} in", args.config)
+            return 1
+        toks = [(str(sp.backup["kotak_token"]), sp.backup.get("kotak_segment", "nse_cm")) for sp in specs]
+        prices = KotakNeoQuotes().ltp(toks)
+        print("Kotak Neo login OK. Live prices:")
+        for sp, (tok, _) in zip(specs, toks):
+            px = prices.get(tok)
+            print(f"  {sp.instrument.symbol:<12} token {tok:<6} {'Rs ' + format(px, ',.2f') if px else 'NO PRICE (check the token with kotak-find)'}")
     elif args.cmd == "kotak-find":
         from .data.kotak import KotakNeoQuotes
         for r in KotakNeoQuotes().find(args.symbol, args.segment):

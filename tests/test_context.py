@@ -294,3 +294,24 @@ def test_no_backup_configured_means_no_switch():
     for _ in range(5):
         assert feed.poll(T) == {}
     assert feed.on_backup == set()
+
+
+def test_live_feed_kotak_as_main_source_never_calls_upstox():
+    specs = parse_instruments({"instruments": [
+        {"symbol": "RELIANCE", "strategy": {"name": "orb"}, "backup": {"kotak_token": "2885"}},
+        {"symbol": "NOTOKEN", "strategy": {"name": "orb"}}]})
+    px = {"v": 1400.0}
+
+    class Kotak:
+        def ltp(self, toks):
+            px["v"] += 0.5
+            return {"2885": px["v"]}
+
+    feed = LiveFeed(specs, 5, upstox=None, kotak=Kotak())
+    t0 = datetime(2026, 11, 4, 9, 15, 2, tzinfo=IST)
+    out = {}
+    for k in range(80):                                   # ~13 minutes of 10-second polls
+        out = feed.poll(t0 + timedelta(seconds=10 * k))
+    assert "NOTOKEN" not in out and len(out["RELIANCE"]) == 2   # 09:15 and 09:20 candles complete
+    c = out["RELIANCE"].iloc[0]
+    assert c["open"] < c["close"] and c["high"] >= c["close"]

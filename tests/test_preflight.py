@@ -12,15 +12,30 @@ def statuses(res):
     return {check: status for status, check, _ in res}
 
 
-def test_my_config_is_valid_and_needs_upstox_keys(monkeypatch):
+def test_upstox_mode_needs_upstox_keys(monkeypatch):
     for k in ("UPSTOX_API_KEY", "UPSTOX_API_SECRET", "UPSTOX_ACCESS_TOKEN"):
         monkeypatch.delenv(k, raising=False)
-    st = statuses(run_checks(load_config("config/my.yaml"), online=False, now=MON))
+    cfg = {**load_config("config/my.yaml"), "live_data": "upstox"}
+    st = statuses(run_checks(cfg, online=False, now=MON))
     assert st["Config loads"] == OK and st["Instrument keys"] == OK and st["Trading day"] == OK
     assert st["Upstox credentials"] == FAIL
-    monkeypatch.setenv("UPSTOX_API_KEY", "k")
-    monkeypatch.setenv("UPSTOX_API_SECRET", "s")
-    assert statuses(run_checks(load_config("config/my.yaml"), online=False, now=MON))["Upstox credentials"] == OK
+    monkeypatch.setenv("UPSTOX_ACCESS_TOKEN", "t")
+    assert statuses(run_checks(cfg, online=False, now=MON))["Upstox credentials"] == OK
+
+
+def test_kotak_mode_needs_kotak_not_upstox(monkeypatch):
+    import sys, types
+    for k in ("UPSTOX_API_KEY", "UPSTOX_API_SECRET", "UPSTOX_ACCESS_TOKEN", "KOTAK_CONSUMER_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    cfg = load_config("config/my.yaml")
+    assert cfg["live_data"] == "kotak"
+    st = statuses(run_checks(cfg, online=False, now=MON))
+    assert "Upstox credentials" not in st and st["Kotak Neo (main data)"] == FAIL
+    monkeypatch.setitem(sys.modules, "neo_api_client", types.ModuleType("neo_api_client"))
+    for k in ("KOTAK_CONSUMER_KEY", "KOTAK_MOBILE", "KOTAK_UCC", "KOTAK_MPIN"):
+        monkeypatch.setenv(k, "x")
+    st = statuses(run_checks(cfg, online=False, now=MON))
+    assert st["Kotak Neo (main data)"] == OK
 
 
 def test_holidays_and_weekends():
