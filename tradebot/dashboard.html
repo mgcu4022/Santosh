@@ -174,6 +174,11 @@ function render(s) {
   const al = $("alert");
   if (s.halted) { al.className = "alert bad"; al.style.display = "block"; al.textContent = `Trading stopped for today: ${s.halt_reason}. Open positions were closed.`; }
   else if (stale) { al.className = "alert warn"; al.style.display = "block"; al.textContent = `No update for ${Math.round(age / 60)} min. Is the bot still running? Check its PowerShell window.`; }
+  else if (!s.settings || !s.watch) {
+    al.className = "alert warn"; al.style.display = "block";
+    al.textContent = "This bot was started with older code, so it doesn't save the watchlist and settings yet. " +
+      "When it has no open positions: press Ctrl+C in its window, run 'git pull', then start it again. The page fills in within a minute.";
+  }
   else al.style.display = "none";
 
   const lossUsed = Math.max(0, -(s.mtm || 0));
@@ -226,7 +231,7 @@ function render(s) {
       ${track}</div>`;
   }).join("") || `<div class="empty">No open positions. The bot is waiting for a valid setup.</div>`;
 
-  const evs = (s.events || []).slice().reverse();
+  const evs = (s.events || s.recent_events || []).slice().reverse();
   $("events").innerHTML = evs.map(e => `<div class="ev ${esc(e.event)}"><span class="time num">${esc(String(e.time || "").slice(11, 16))}</span>${esc(eventText(e))}</div>`).join("")
     || `<div class="empty">Nothing yet today. Skipped and taken trades appear here.</div>`;
   $("closed").innerHTML = (s.closed || []).slice().reverse().map(t => `<tr><td class="l num">${esc(String(t.exit_time || "").slice(11, 16))}</td>
