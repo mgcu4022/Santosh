@@ -429,8 +429,9 @@ def _scan(args):
         from .data.nse import NseClient
         bhav, meta = NseClient().daily_history_with_meta(150)
         isin = {k: v.get("isin", "") for k, v in meta.items()}
-        if args.all:   # every EQ-series stock (BE = trade-to-trade: no intraday)
-            syms = [k for k, v in meta.items() if str(v.get("series", "EQ")) == "EQ"]
+        if args.all:   # every EQ-series company stock (BE = trade-to-trade: no intraday; ETFs/funds excluded)
+            from .data.nse import is_company_stock
+            syms = [k for k, v in meta.items() if str(v.get("series", "EQ")) == "EQ" and is_company_stock(k, v)]
         for s in syms:
             if s in bhav:
                 data[s] = bhav[s]

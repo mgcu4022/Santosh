@@ -86,7 +86,7 @@ def test_bhavcopy_series_and_isin():
                  "2026-11-03,TINYCO,BE,INE000X01011,TINY,10,11,9,10,10\n").encode()
     df = parse_bhavcopy(raw)
     meta = bhav_meta([df])
-    assert meta["NHPC"] == {"series": "EQ", "isin": "INE848E01016", "name": "NHPC LTD"}
+    assert meta["NHPC"] == {"series": "EQ", "isin": "INE848E01016", "name": "NHPC LTD", "itype": "STK"}
     assert meta["TINYCO"]["series"] == "BE"
 
 
@@ -147,3 +147,13 @@ def test_live_finds_trial_runs_subfolder(tmp_path):
     (d / "state.json").write_text(json.dumps({"mtm": 120.0}), encoding="utf-8")
     s, folder = latest_paper_state(str(tmp_path), today="20261105")
     assert s["mtm"] == 120.0 and folder == d
+
+
+def test_etfs_and_funds_are_not_company_stocks():
+    from tradebot.data.nse import is_company_stock
+    assert is_company_stock("GAIL", {"name": "GAIL (INDIA) LIMITED", "itype": "STK"})
+    assert not is_company_stock("SILVERBEES", {"name": "NIPPON INDIA SILVER ETF", "itype": "STK"})
+    assert not is_company_stock("SILVERIETF", {"name": "ICICI PRUDENTIAL SILVER ETF", "itype": "STK"})
+    assert not is_company_stock("NIFTYBEES", {"name": "NIPPON INDIA ETF NIFTY 50 BEES", "itype": "STK"})
+    assert not is_company_stock("XYZ", {"name": "SOME FUND", "itype": "ETF"})
+    assert not is_company_stock("EMBASSY", {"name": "EMBASSY OFFICE PARKS REIT", "itype": "STK"})

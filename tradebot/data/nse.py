@@ -63,6 +63,7 @@ def parse_bhavcopy(raw: bytes) -> pd.DataFrame:
         "name": df.get("FinInstrmNm", pd.Series([""] * len(df), index=df.index)),
         "series": df["SctySrs"].astype(str).str.strip() if "SctySrs" in df.columns else "EQ",
         "isin": df["ISIN"].astype(str).str.strip() if "ISIN" in df.columns else "",
+        "itype": df["FinInstrmTp"].astype(str).str.strip() if "FinInstrmTp" in df.columns else "STK",
     })
     return out.reset_index(drop=True)
 
@@ -75,8 +76,19 @@ def bhav_meta(frames: list[pd.DataFrame]) -> dict[str, dict]:
         for row in f.itertuples(index=False):
             meta[row.symbol] = {"series": getattr(row, "series", "EQ") if "series" in cols else "EQ",
                                 "isin": getattr(row, "isin", "") if "isin" in cols else "",
-                                "name": getattr(row, "name", "")}
+                                "name": getattr(row, "name", ""),
+                                "itype": getattr(row, "itype", "STK") if "itype" in cols else "STK"}
     return meta
+
+
+def is_company_stock(symbol: str, meta: dict) -> bool:
+    """True for ordinary company shares; False for ETFs/index funds (e.g. SILVERBEES, NIFTYIETF), REITs etc."""
+    itype = str(meta.get("itype", "STK")).upper()
+    if itype not in ("STK", "", "NAN"):
+        return False
+    name, sym = str(meta.get("name", "")).upper(), symbol.upper()
+    fund_words = (" ETF", "ETF ", "EXCHANGE TRADED", " FUND", "BEES", "INVIT", "REIT", "INDEX")
+    return not (sym.endswith(("BEES", "ETF", "IETF")) or any(w in f" {name} " for w in fund_words))
 
 
 def bhav_to_daily(frames: list[pd.DataFrame]) -> dict[str, pd.DataFrame]:
