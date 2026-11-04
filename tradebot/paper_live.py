@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from .config import build_desk
-from .data.barbuilder import BarBuilder
+from .data.barbuilder import BarBuilder, empty_bars
 from .data.upstox import UpstoxData
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -37,6 +37,17 @@ def market_open(now: datetime, holidays: set[str]) -> bool:
     if now.weekday() >= 5 or now.strftime("%Y-%m-%d") in holidays:
         return False
     return datetime.strptime("09:15", "%H:%M").time() <= now.time() <= datetime.strptime("15:30", "%H:%M").time()
+
+
+def merge_bars(*frames: pd.DataFrame, keep: str = "last") -> pd.DataFrame:
+    """Join candle tables, skipping empty ones, and always return a sorted time index."""
+    parts = [f for f in frames if f is not None and len(f)]
+    if not parts:
+        return empty_bars()
+    df = pd.concat(parts) if len(parts) > 1 else parts[0].copy()
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.DatetimeIndex(pd.to_datetime(df.index, utc=True)).tz_convert(IST)
+    return df[~df.index.duplicated(keep=keep)].sort_index()
 
 
 def completed(df: pd.DataFrame, interval_min: int, now: datetime) -> pd.DataFrame:
@@ -91,9 +102,7 @@ class LiveFeed:
             self._poll_backup(now)
             for sym in self.on_backup:
                 built = self.builders[sym].frame()
-                base = self.last_primary.get(sym, pd.DataFrame(columns=built.columns))
-                df = pd.concat([base, built]) if len(base) else built
-                out[sym] = df[~df.index.duplicated(keep="first")].sort_index()   # prefer real candles
+                out[sym] = merge_bars(self.last_primary.get(sym), built, keep="first")   # prefer real candles
         return out
 
     def _poll_backup(self, now: datetime) -> None:
@@ -120,12 +129,11 @@ def warmup_history(spec, interval: int, days: int, upstox, include_today: bool =
     started mid-session still knows today's opening range. Kotak quotes take over from there.
     """
     end = date.today() - timedelta(days=1)
-    try:
-        if upstox is None:
-            raise RuntimeError("Upstox not used (Kotak Neo is the live source)")
-        return upstox.historical(spec.data_key, "minutes", interval, date.today() - timedelta(days=days), end)
-    except Exception as e:
-        log.warning("%s: Upstox history failed (%s); trying Yahoo", spec.instrument.symbol, e)
+    if upstox is not None:
+        try:
+            return upstox.historical(spec.data_key, "minutes", interval, date.today() - timedelta(days=days), end)
+        except Exception as e:
+            log.warning("%s: Upstox history failed (%s); trying Yahoo", spec.instrument.symbol, e)
     try:
         from .data.yahoo import YahooData, to_yahoo_ticker
         df = YahooData().history(to_yahoo_ticker(spec.instrument.symbol, spec.instrument.exchange),
@@ -138,7 +146,7 @@ def warmup_history(spec, interval: int, days: int, upstox, include_today: bool =
         return df
     except Exception as e:
         log.warning("%s: Yahoo history failed too (%s); indicators will warm up live", spec.instrument.symbol, e)
-        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+        return empty_bars()
 
 
 def is_trading_day(d: date, holidays: set[str]) -> bool:
@@ -217,6 +225,8 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
                                                    include_today=(live_data == "kotak")) for s in specs}
     last_done = {sym: (df.index[-1] if len(df) else None) for sym, df in history.items()}
     first_pass = set(history)   # on start-up, skip candles that closed before we started
+    errors: dict[str, int] = {}
+    crashed = False
 
     try:
         while True:
@@ -231,32 +241,46 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
                 time.sleep(poll_seconds)
                 continue
             for sym, today in feed.poll(now).items():
-                df = pd.concat([history[sym], today]) if len(history[sym]) else today
-                df = df[~df.index.duplicated(keep="last")].sort_index()
-                if sym in first_pass:
-                    first_pass.discard(sym)
-                    if len(df):
-                        last_done[sym] = df.index[-1]
-                    continue
-                if df.empty:
-                    continue
-                prepared = desk.books[sym].strategy.prepare(df)
-                new_idx = [i for i, ts in enumerate(prepared.index)
-                           if last_done[sym] is None or ts > last_done[sym]]
-                for i in new_idx:
-                    desk.on_bar(sym, prepared, i)
-                if new_idx:
-                    last_done[sym] = prepared.index[new_idx[-1]]
+                try:
+                    process_symbol(desk, sym, today, history, last_done, first_pass)
+                    errors[sym] = 0
+                except Exception as e:      # one bad symbol/candle must not stop the whole session
+                    errors[sym] = errors.get(sym, 0) + 1
+                    log.exception("%s: skipped this update after an error: %s", sym, e)
+                    if errors[sym] == 3 and notifier is not None:
+                        notifier.send(f"[PAPER] {sym}: repeated errors ({str(e)[:100]}); still running")
             _save(desk, run)
             time.sleep(poll_seconds)
     except KeyboardInterrupt:
         log.info("Stopped by user.")
+    except Exception:
+        crashed = True
+        raise
     finally:
         _save(desk, run)
         if notifier is not None:
-            notifier.send(f"[PAPER] Day end: equity Rs{desk.broker.equity():,.0f}, trades {len(desk.broker.trades)}")
+            what = "STOPPED BY AN ERROR" if crashed else "Day end"
+            notifier.send(f"[PAPER] {what}: equity Rs{desk.broker.equity():,.0f}, trades {len(desk.broker.trades)}")
             notifier.close()
         log.info("Equity Rs%.2f | trades %d | saved to %s", desk.broker.equity(), len(desk.broker.trades), run)
+
+
+def process_symbol(desk, sym: str, today: pd.DataFrame, history: dict, last_done: dict, first_pass: set) -> None:
+    """Push every newly completed candle of one symbol through the trading desk."""
+    df = merge_bars(history.get(sym), today)
+    if sym in first_pass:          # on start-up, candles that closed before we started are history only
+        first_pass.discard(sym)
+        if len(df):
+            last_done[sym] = df.index[-1]
+        return
+    if df.empty:
+        return
+    prepared = desk.books[sym].strategy.prepare(df)
+    new_idx = [i for i, ts in enumerate(prepared.index) if last_done.get(sym) is None or ts > last_done[sym]]
+    for i in new_idx:
+        desk.on_bar(sym, prepared, i)
+    if new_idx:
+        last_done[sym] = prepared.index[new_idx[-1]]
 
 
 def _save(desk, run: Path) -> None:

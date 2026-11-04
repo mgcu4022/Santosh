@@ -11,6 +11,14 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 SESSION_START = (9, 15)
+COLUMNS = ["open", "high", "low", "close", "volume"]
+
+
+def empty_bars() -> pd.DataFrame:
+    """An empty candle table that still has a time index (so joins and .time keep working)."""
+    from zoneinfo import ZoneInfo
+    return pd.DataFrame({c: pd.Series(dtype=float) for c in COLUMNS},
+                        index=pd.DatetimeIndex([], tz=ZoneInfo("Asia/Kolkata"), name="datetime"))
 
 
 def bucket_start(ts: datetime, interval_min: int) -> datetime:
@@ -45,5 +53,5 @@ class BarBuilder:
 
     def frame(self) -> pd.DataFrame:
         if not self.done:
-            return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
-        return pd.DataFrame(self.done).set_index("datetime")
+            return empty_bars()
+        return pd.DataFrame(self.done).set_index("datetime")[COLUMNS]

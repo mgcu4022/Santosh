@@ -1,4 +1,5 @@
 """NSE data, RSS news, market-context guard, Kotak backup and failover (all offline)."""
+import json
 import io
 import zipfile
 from datetime import date, datetime, timedelta, timezone
@@ -374,3 +375,53 @@ def test_kotak_mode_warmup_includes_todays_finished_candles(monkeypatch):
     assert seen["end"] == date.today()
     assert df.index[-1] == pd.Timestamp("2026-11-04 11:15", tz=IST)             # 11:20 candle still forming
     assert (df.index.date == date(2026, 11, 4)).sum() == 25                       # opening range is known
+
+
+def test_run_paper_kotak_mode_end_to_end(monkeypatch, tmp_path, caplog):
+    """Regression: starting mid-session on Kotak used to crash on the empty first candle."""
+    import datetime as dt
+    import tradebot.paper_live as pl
+    import tradebot.data.kotak as kmod
+    import tradebot.data.yahoo as y
+    from tradebot.data.synthetic import synthetic_intraday
+
+    day = date(2026, 11, 4)
+    full = synthetic_intraday(days=6, seed=11, start_price=1300, start="2026-10-29")
+    full = full[full.index.date <= day]
+    clock = {"t": datetime(2026, 11, 4, 11, 21, 30, tzinfo=IST)}
+
+    class FakeDT(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock["t"]
+
+    class FakeDate(dt.date):
+        @classmethod
+        def today(cls):
+            return day
+
+    def fake_yahoo(self, ticker, interval, start, end):
+        return full[full.index <= clock["t"]]
+
+    class FakeKotak:
+        client = object()
+
+        def ltp(self, toks):
+            px = float(full[full.index <= clock["t"]]["close"].iloc[-1])
+            return {t: px for t, _ in toks}
+
+    monkeypatch.setattr(pl, "datetime", FakeDT)
+    monkeypatch.setattr(pl, "date", FakeDate)
+    monkeypatch.setattr(pl.time, "sleep", lambda s: clock.__setitem__("t", clock["t"] + timedelta(seconds=30)))
+    monkeypatch.setattr(y.YahooData, "history", fake_yahoo)
+    monkeypatch.setattr(kmod, "KotakNeoQuotes", FakeKotak)
+    cfg = {"capital": 500000, "live_data": "kotak", "timeframe": {"unit": "minutes", "interval": 5},
+           "instruments": [{"symbol": s, "strategy": {"name": "orb"}, "backup": {"kotak_token": t}}
+                           for s, t in (("RELIANCE", "2885"), ("SBIN", "3045"))]}
+    pl.run_paper(cfg, out_dir=str(tmp_path), poll_seconds=30)
+    run = next(tmp_path.glob("paper_20261104*"))
+    state = json.loads((run / "state.json").read_text(encoding="utf-8"))
+    assert state["positions"] == []                                  # everything closed by 15:15
+    assert (run / "journal.csv").exists() and (run / "trades.csv").exists()   # ran to the close, no crash
+    assert "skipped this update" not in caplog.text                  # no errors were swallowed
+    assert clock["t"].time() > dt.time(15, 30)
