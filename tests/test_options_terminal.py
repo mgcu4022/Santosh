@@ -278,3 +278,12 @@ def test_state_has_plain_language_fields(term):
     assert "gains if NIFTY falls" in pos["desc"] and pos["breakeven"] == 23100
     assert s["limits"]["daily_loss_limit"] == 15000 and s["days_to_expiry"] > 7
     assert {"pcr", "support", "resistance", "max_pain"} <= set(s["analytics"])
+
+
+def test_terminal_rolls_to_next_expiry_after_one_passes(term):
+    term.market.expiries = lambda u: ["2026-11-03", "2026-11-10", "2026-11-17"]
+    term.expiry = "2026-11-03"
+    term.now["t"] = datetime(2026, 11, 4, 10, 0, tzinfo=IST)
+    term.tick()
+    assert term.expiry == "2026-11-10" and "2026-11-03" not in term.expiries
+    assert any("has passed" in m["text"] for m in term.messages)

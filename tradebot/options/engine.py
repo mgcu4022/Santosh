@@ -114,6 +114,11 @@ class OptionTerminal:
     def tick(self) -> None:
         with self.lock:
             now = self.clock()
+            if self.expiry and self.expiry < now.date().isoformat():   # expiry passed (e.g. left running overnight)
+                old = self.expiry
+                self.expiries = [e for e in self.p.expiries(self.underlying) if e >= now.date().isoformat()]
+                self.expiry = self.expiries[0] if self.expiries else ""
+                self._note("info", f"Expiry {old} has passed; switched to {self.expiry}")
             self.chain = self.p.chain(self.underlying, self.expiry)
             self.chains[(self.underlying, self.expiry)] = self.chain
             held = {(m["underlying"], m["expiry"]) for s, m in self.meta.items() if self.broker.get_position(s)}
