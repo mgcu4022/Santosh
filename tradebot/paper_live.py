@@ -112,8 +112,13 @@ class LiveFeed:
             self.builders[sym].close_due(now)
 
 
-def warmup_history(spec, interval: int, days: int, upstox) -> pd.DataFrame:
-    """Previous days' candles so indicators are ready. Upstox first, then Yahoo."""
+def warmup_history(spec, interval: int, days: int, upstox, include_today: bool = False,
+                   now: datetime | None = None) -> pd.DataFrame:
+    """Previous days' candles so indicators are ready. Upstox first, then Yahoo.
+
+    include_today (Kotak mode): also take today's finished candles from Yahoo, so a strategy
+    started mid-session still knows today's opening range. Kotak quotes take over from there.
+    """
     end = date.today() - timedelta(days=1)
     try:
         if upstox is None:
@@ -124,9 +129,13 @@ def warmup_history(spec, interval: int, days: int, upstox) -> pd.DataFrame:
     try:
         from .data.yahoo import YahooData, to_yahoo_ticker
         df = YahooData().history(to_yahoo_ticker(spec.instrument.symbol, spec.instrument.exchange),
-                                 f"{interval}m", date.today() - timedelta(days=min(days, 59)), end)
+                                 f"{interval}m", date.today() - timedelta(days=min(days, 59)),
+                                 date.today() if include_today else end)
         t = df.index.time
-        return df[(t >= datetime.strptime("09:15", "%H:%M").time()) & (t < datetime.strptime("15:30", "%H:%M").time())]
+        df = df[(t >= datetime.strptime("09:15", "%H:%M").time()) & (t < datetime.strptime("15:30", "%H:%M").time())]
+        if include_today:
+            df = completed(df, interval, now or datetime.now(IST))     # drop the candle still forming
+        return df
     except Exception as e:
         log.warning("%s: Yahoo history failed too (%s); indicators will warm up live", spec.instrument.symbol, e)
         return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
@@ -204,7 +213,8 @@ def run_paper(cfg: dict, out_dir: str = "runs", poll_seconds: int = 20, warmup_d
     if context is not None and context.banned:
         log.info("F&O ban list today: %s", ", ".join(sorted(context.banned)))
 
-    history = {s.instrument.symbol: warmup_history(s, tf["interval"], warmup_days, upstox) for s in specs}
+    history = {s.instrument.symbol: warmup_history(s, tf["interval"], warmup_days, upstox,
+                                                   include_today=(live_data == "kotak")) for s in specs}
     last_done = {sym: (df.index[-1] if len(df) else None) for sym, df in history.items()}
     first_pass = set(history)   # on start-up, skip candles that closed before we started
 

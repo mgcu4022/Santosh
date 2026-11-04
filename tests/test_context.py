@@ -353,3 +353,24 @@ def test_scrip_url_variants():
     assert scrip_url("https://x/nse_cm.csv", "nse_cm") == "https://x/nse_cm.csv"
     with pytest.raises(KotakError):
         scrip_url({"oops": 1}, "nse_cm")
+
+
+def test_kotak_mode_warmup_includes_todays_finished_candles(monkeypatch):
+    import tradebot.data.yahoo as y
+    from tradebot.paper_live import warmup_history
+    idx = pd.date_range("2026-11-03 09:15", periods=75, freq="5min", tz=IST).append(
+        pd.date_range("2026-11-04 09:15", periods=26, freq="5min", tz=IST))          # today up to 11:20
+    bars = pd.DataFrame({"open": 1.0, "high": 2.0, "low": 0.5, "close": 1.5, "volume": 1.0}, index=idx)
+    seen = {}
+
+    def fake_history(self, ticker, interval, start, end):
+        seen["end"] = end
+        return bars
+
+    monkeypatch.setattr(y.YahooData, "history", fake_history)
+    spec = parse_instruments({"instruments": [{"symbol": "SBIN", "strategy": {"name": "orb"}}]})[0]
+    now = datetime(2026, 11, 4, 11, 22, tzinfo=IST)
+    df = warmup_history(spec, 5, 10, upstox=None, include_today=True, now=now)
+    assert seen["end"] == date.today()
+    assert df.index[-1] == pd.Timestamp("2026-11-04 11:15", tz=IST)             # 11:20 candle still forming
+    assert (df.index.date == date(2026, 11, 4)).sum() == 25                       # opening range is known
