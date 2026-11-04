@@ -315,3 +315,41 @@ def test_live_feed_kotak_as_main_source_never_calls_upstox():
     assert "NOTOKEN" not in out and len(out["RELIANCE"]) == 2   # 09:15 and 09:20 candles complete
     c = out["RELIANCE"].iloc[0]
     assert c["open"] < c["close"] and c["high"] >= c["close"]
+
+
+def test_kotak_client_needs_only_consumer_key(monkeypatch):
+    import sys, types
+    from tradebot.data import kotak as k
+    made = {}
+
+    class NeoAPI:
+        def __init__(self, **kw):
+            made.update(kw)
+
+        def quotes(self, instrument_tokens, quote_type):
+            made["calls"] = made.get("calls", 0) + 1
+            return [{"exchange_token": t["instrument_token"], "ltp": "100.5000"} for t in instrument_tokens]
+
+        def totp_login(self, **kw):
+            raise AssertionError("quotes must not need a TOTP login")
+
+    monkeypatch.setitem(sys.modules, "neo_api_client", types.SimpleNamespace(NeoAPI=NeoAPI))
+    monkeypatch.delenv("KOTAK_CONSUMER_KEY", raising=False)
+    with pytest.raises(KotakError, match="KOTAK_CONSUMER_KEY"):
+        k.KotakNeoQuotes().ltp([("2885", "nse_cm")])
+    monkeypatch.setenv("KOTAK_CONSUMER_KEY", "ck")
+    q = k.KotakNeoQuotes()
+    prices = q.ltp([(str(i), "nse_cm") for i in range(120)])        # 120 tokens -> 3 calls of <=50
+    assert made["consumer_key"] == "ck" and made["environment"] == "prod"
+    assert len(prices) == 120 and prices["7"] == 100.5 and made["calls"] == 3
+
+
+def test_scrip_url_variants():
+    from tradebot.data.kotak import scrip_url
+    base = "https://lapi.kotaksecurities.com/wso2-scripmaster/v1/prod/2026-11-04/transformed-v1/"
+    resp = {"filesPaths": [base + "bse_cm-v1.csv", base + "nse_cm-v1.csv", base + "nse_fo.csv"]}
+    assert scrip_url(resp, "nse_cm").endswith("nse_cm-v1.csv")
+    assert scrip_url(resp, "nse_fo").endswith("nse_fo.csv")
+    assert scrip_url("https://x/nse_cm.csv", "nse_cm") == "https://x/nse_cm.csv"
+    with pytest.raises(KotakError):
+        scrip_url({"oops": 1}, "nse_cm")

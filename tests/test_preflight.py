@@ -32,8 +32,7 @@ def test_kotak_mode_needs_kotak_not_upstox(monkeypatch):
     st = statuses(run_checks(cfg, online=False, now=MON))
     assert "Upstox credentials" not in st and st["Kotak Neo (main data)"] == FAIL
     monkeypatch.setitem(sys.modules, "neo_api_client", types.ModuleType("neo_api_client"))
-    for k in ("KOTAK_CONSUMER_KEY", "KOTAK_MOBILE", "KOTAK_UCC", "KOTAK_MPIN"):
-        monkeypatch.setenv(k, "x")
+    monkeypatch.setenv("KOTAK_CONSUMER_KEY", "x")                 # quotes need only the consumer key
     st = statuses(run_checks(cfg, online=False, now=MON))
     assert st["Kotak Neo (main data)"] == OK
 

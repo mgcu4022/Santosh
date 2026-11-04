@@ -214,9 +214,10 @@ stock to **Kotak Neo** prices and builds 5-minute candles from them. It retries 
 minutes and switches back, with a Telegram alert each time. Kotak Neo has no historical candles,
 so it is a live backup only; warm-up history falls back to Yahoo.
 
-1. Install the SDK: `pip install "git+https://github.com/Kotak-Neo/kotak-neo-api.git#egg=neo_api_client" pyotp`
+1. Install Kotak's official SDK: `pip install kotakneoapi` (included in `requirements.txt`).
 2. Get your consumer key from the Neo API section of Kotak Neo, then set
-   `KOTAK_CONSUMER_KEY`, `KOTAK_MOBILE`, `KOTAK_UCC`, `KOTAK_MPIN` (and optionally `KOTAK_TOTP_SECRET`).
+   `KOTAK_CONSUMER_KEY` in `.env` (Kotak Neo: More → Trade API → copy the token). Reading prices needs only
+   this key: no TOTP, no MPIN.
 3. `python -m tradebot kotak-test`, then `python -m tradebot kotak-find RELIANCE` for tokens.
 4. Add `backup: {kotak_token: "...", kotak_segment: nse_cm}` to each instrument.
 

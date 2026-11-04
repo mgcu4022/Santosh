@@ -138,5 +138,4 @@ def env_check() -> dict:
             "ANTHROPIC_API_KEY": bool(os.environ.get("ANTHROPIC_API_KEY")),
             "TELEGRAM_BOT_TOKEN": bool(os.environ.get("TELEGRAM_BOT_TOKEN")),
             "TELEGRAM_CHAT_ID": bool(os.environ.get("TELEGRAM_CHAT_ID")),
-            "KOTAK_CONSUMER_KEY": bool(os.environ.get("KOTAK_CONSUMER_KEY")),
-            "KOTAK_MOBILE/UCC/MPIN": all(os.environ.get(k) for k in ("KOTAK_MOBILE", "KOTAK_UCC", "KOTAK_MPIN"))}
+            "KOTAK_CONSUMER_KEY": bool(os.environ.get("KOTAK_CONSUMER_KEY"))}

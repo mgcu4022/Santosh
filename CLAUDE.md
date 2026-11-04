@@ -83,12 +83,12 @@ Recommended: **Analytics Token**. https://account.upstox.com/developer/apps → 
    "Upstox data ⚠️ normal before today's login" is fine.
 
 Kotak Neo instead of Upstox: `config/my.yaml` has `live_data: kotak` (strategy bot only; quotes → 5-min
-candles, history from Yahoo). Needs the Kotak SDK (`pip install "git+https://github.com/Kotak-Neo/kotak-neo-api.git#egg=neo_api_client" pyotp`)
-and `KOTAK_CONSUMER_KEY`, `KOTAK_MOBILE`, `KOTAK_UCC`, `KOTAK_MPIN` (+ optional `KOTAK_TOTP_SECRET`) typed into `.env`
-by the user. Verify with `python -m tradebot kotak-test` (prints live prices for the config's stocks).
+candles, history from Yahoo). Needs Kotak's official SDK `kotakneoapi` (in requirements.txt) and only
+`KOTAK_CONSUMER_KEY` (Kotak Neo: More → Trade API → token) typed into `.env` by the user. Quotes need no TOTP/MPIN;
+never ask for or store the MPIN. Verify with `python -m tradebot kotak-test` (prints live prices for the config's stocks).
 
 Optional extras (all in README): Telegram alerts (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
-then `alert-test`), Kotak Neo backup data (SDK + `KOTAK_*` vars, then `kotak-test`),
+then `alert-test`), Kotak Neo backup data (`KOTAK_CONSUMER_KEY`, then `kotak-test`),
 Claude AI analyst (`ANTHROPIC_API_KEY`, `analyst.enabled: true`, costs money per call).
 
 ## 5. Daily routine (market days, IST)

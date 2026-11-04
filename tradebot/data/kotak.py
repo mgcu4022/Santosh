@@ -1,27 +1,21 @@
-"""Kotak Neo live quotes (backup data source for paper trading).
+"""Kotak Neo live quotes (data source for paper trading). Read-only.
 
-Kotak Neo's API is free for Kotak Securities clients but has no historical
-candle endpoint, so it is used only as a live backup: quotes are polled and
-turned into candles by BarBuilder.
+Uses Kotak's official Python SDK `kotakneoapi` (module `neo_api_client`, Python 3.10+):
+  pip install kotakneoapi
 
-Install the official SDK:
-  pip install "git+https://github.com/Kotak-Neo/kotak-neo-api.git#egg=neo_api_client" pyotp
+Reading quotes and the scrip master needs ONLY the consumer key (no TOTP, no MPIN),
+so nothing else is stored. Get it in the Kotak Neo app/web: More -> Trade API ->
+create/generate application -> copy the token. Put it in .env:
+  KOTAK_CONSUMER_KEY=...
 
-Credentials come from environment variables only (never files):
-  KOTAK_CONSUMER_KEY   from the Neo API section of the Kotak Neo app/web
-  KOTAK_MOBILE         registered mobile, e.g. +919999999999
-  KOTAK_UCC            your client code
-  KOTAK_MPIN           6-digit MPIN
-  KOTAK_TOTP_SECRET    optional: authenticator secret, to create the TOTP automatically
-                       (otherwise you're asked to type the 6-digit TOTP at start-up)
+Kotak has no historical candle endpoint, so quotes are polled and turned into
+5-minute candles by BarBuilder; earlier days come from Yahoo.
 
 Each instrument needs its Kotak token in the config:
-  backup: {kotak_token: "2885", kotak_segment: nse_cm}     # nse_cm, bse_cm, nse_fo
+  backup: {kotak_token: "2885", kotak_segment: nse_cm}     # nse_cm, bse_cm, nse_fo, bse_fo
 Find tokens with:  python -m tradebot kotak-find RELIANCE
-
-The SDK login and quote calls follow Kotak's published SDK (TOTP login flow).
-They have not been tested against the live API from this project, so check
-`python -m tradebot kotak-test` works before relying on it.
+Check prices with: python -m tradebot kotak-test
+Limits (Kotak docs): 50 instruments per quotes call, 25 requests per second.
 """
 from __future__ import annotations
 
@@ -59,6 +53,20 @@ def parse_quotes(resp) -> dict[str, float]:
     return out
 
 
+def scrip_url(resp, segment: str) -> str:
+    """scrip_master() returns either the file URL or {"filesPaths": [...]}: pick this segment's CSV."""
+    if isinstance(resp, str):
+        return resp
+    if isinstance(resp, dict):
+        paths = resp.get("filesPaths") or ([resp["data"]] if isinstance(resp.get("data"), str) else [])
+        for p in paths:
+            if f"/{segment}" in p.lower() or p.lower().endswith(f"{segment}.csv"):
+                return p
+        if paths:
+            return paths[0]
+    raise KotakError(f"Unexpected scrip master response: {str(resp)[:200]}")
+
+
 class KotakNeoQuotes:
     def __init__(self, client=None):
         self._client = client
@@ -71,38 +79,30 @@ class KotakNeoQuotes:
 
     @staticmethod
     def _login():
+        """Create the SDK client. Quotes need only the consumer key: no TOTP/MPIN login."""
         try:
             from neo_api_client import NeoAPI
         except ImportError as e:
-            raise KotakError("Kotak SDK not installed (see tradebot/data/kotak.py)") from e
-        env = {k: os.environ.get(k, "") for k in ("KOTAK_CONSUMER_KEY", "KOTAK_MOBILE", "KOTAK_UCC", "KOTAK_MPIN")}
-        missing = [k for k, v in env.items() if not v]
-        if missing:
-            raise KotakError(f"Set environment variables: {', '.join(missing)}")
-        secret = os.environ.get("KOTAK_TOTP_SECRET")
-        if secret:
-            import pyotp
-            totp = pyotp.TOTP(secret).now()
-        else:
-            totp = input("Kotak Neo TOTP (6 digits from your authenticator app): ").strip()
-        client = NeoAPI(environment="prod", access_token=None, neo_fin_key=None,
-                        consumer_key=env["KOTAK_CONSUMER_KEY"])
-        client.totp_login(mobile_number=env["KOTAK_MOBILE"], ucc=env["KOTAK_UCC"], totp=totp)
-        client.totp_validate(mpin=env["KOTAK_MPIN"])
-        log.info("Kotak Neo login OK")
+            raise KotakError("Kotak SDK not installed: pip install kotakneoapi") from e
+        key = os.environ.get("KOTAK_CONSUMER_KEY", "")
+        if not key:
+            raise KotakError("Set KOTAK_CONSUMER_KEY in .env (Kotak Neo: More -> Trade API -> copy token)")
+        client = NeoAPI(consumer_key=key, environment="prod", access_token=None, neo_fin_key=None)
+        log.info("Kotak Neo client ready (quotes only)")
         return client
 
     def ltp(self, tokens: list[tuple[str, str]]) -> dict[str, float]:
         """tokens: [(token, segment)], e.g. [("2885", "nse_cm")] -> {"2885": 1401.5}"""
-        req = [{"instrument_token": str(t), "exchange_segment": seg} for t, seg in tokens]
-        return parse_quotes(self.client.quotes(instrument_tokens=req, quote_type="ltp"))
+        out: dict[str, float] = {}
+        for i in range(0, len(tokens), 50):           # Kotak limit: 50 instruments per call
+            req = [{"instrument_token": str(t), "exchange_segment": seg} for t, seg in tokens[i:i + 50]]
+            out.update(parse_quotes(self.client.quotes(instrument_tokens=req, quote_type="ltp")))
+        return out
 
     def find(self, symbol: str, segment: str = "nse_cm") -> list[dict]:
         """Search Kotak's scrip master for a symbol's token."""
         import pandas as pd
-        url = self.client.scrip_master(exchange_segment=segment)
-        if isinstance(url, dict):
-            url = url.get("filesPaths", [url.get("data")])[0] if url.get("filesPaths") else url.get("data")
+        url = scrip_url(self.client.scrip_master(exchange_segment=segment), segment)
         df = pd.read_csv(url, low_memory=False)
         cols = [c for c in df.columns if "sym" in c.lower() or "name" in c.lower()]
         mask = False

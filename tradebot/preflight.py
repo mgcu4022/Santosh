@@ -66,23 +66,20 @@ def run_checks(cfg: dict, online: bool = True, now: datetime | None = None) -> l
         add(OK if os.environ.get("ANTHROPIC_API_KEY") else FAIL, "AI analyst key",
             "set" if os.environ.get("ANTHROPIC_API_KEY") else "analyst enabled but ANTHROPIC_API_KEY not set")
     if any(s.backup for s in specs):
-        kot = all(os.environ.get(k) for k in ("KOTAK_CONSUMER_KEY", "KOTAK_MOBILE", "KOTAK_UCC", "KOTAK_MPIN"))
+        kot = bool(os.environ.get("KOTAK_CONSUMER_KEY"))
         try:
             import neo_api_client  # noqa: F401
             sdk = True
         except ImportError:
             sdk = False
-        missing = [k for k in ("KOTAK_CONSUMER_KEY", "KOTAK_MOBILE", "KOTAK_UCC", "KOTAK_MPIN") if not os.environ.get(k)]
-        need = ("install the SDK (see README)" if not sdk else "") + \
+        missing = [] if kot else ["KOTAK_CONSUMER_KEY"]
+        need = ("pip install kotakneoapi" if not sdk else "") + \
                (("; " if not sdk and missing else "") + "set " + ", ".join(missing) + " in .env" if missing else "")
         no_tok = [s.instrument.symbol for s in specs if not (s.backup or {}).get("kotak_token")]
         if kotak_main:
             add(OK if kot and sdk and not no_tok else FAIL, "Kotak Neo (main data)",
                 "ready: run `python -m tradebot kotak-test` to see live prices" if kot and sdk and not no_tok else
                 (need or f"no kotak_token for {', '.join(no_tok)}"))
-            add(OK if os.environ.get("KOTAK_TOTP_SECRET") else WARN, "Kotak TOTP",
-                "automatic (KOTAK_TOTP_SECRET set)" if os.environ.get("KOTAK_TOTP_SECRET") else
-                "you'll type the 6-digit authenticator code at start-up")
         else:
             add(OK if kot and sdk else WARN, "Kotak Neo backup",
                 "ready" if kot and sdk else "not set up: if Upstox fails, those stocks pause (optional)")
